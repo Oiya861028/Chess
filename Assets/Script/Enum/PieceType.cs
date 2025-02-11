@@ -1,4 +1,4 @@
-public enum ChessType{
+public enum PieceType{
     E, //Empty
     P, // Pawn
     N, // Knight
