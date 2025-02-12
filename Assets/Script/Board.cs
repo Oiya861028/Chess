@@ -2,72 +2,87 @@ using UnityEngine;
 
 public class ChessBoard : MonoBehaviour
 {
-    public const int BoardSize = 8;
-    public ChessPiece[,] board = new ChessPiece[BoardSize, BoardSize];
+    // Bitboard for white pieces
+    private ulong WhitePawn =   0b0000000000000000000000000000000000000000000000001111111100000000;
+    private ulong WhiteRook =   0b0000000000000000000000000000000000000000000000000000000010000001;
+    private ulong WhiteKnight = 0b0000000000000000000000000000000000000000000000000000000001000010;
+    private ulong WhiteBishop = 0b0000000000000000000000000000000000000000000000000000000000100100;
+    private ulong WhiteQueen =  0b0000000000000000000000000000000000000000000000000000000000010000;
+    private ulong WhiteKing =   0b0000000000000000000000000000000000000000000000000000000000001000;
+    // Bitboard for black pieces
+    private ulong BlackPawn =   0b0000000011111111000000000000000000000000000000000000000000000000;
+    private ulong BlackRook =   0b1000000100000000000000000000000000000000000000000000000000000000;
+    private ulong BlackKnight = 0b0100001000000000000000000000000000000000000000000000000000000000;
+    private ulong BlackBishop = 0b0010010000000000000000000000000000000000000000000000000000000000;
+    private ulong BlackQueen =  0b0001000000000000000000000000000000000000000000000000000000000000;
+    private ulong BlackKing =   0b0000100000000000000000000000000000000000000000000000000000000000;
+
+    //Board Dimensions
+    private int squareSize = 1;
+    private Vector3 boardOrigin = new Vector3(0f, 0f, 0f);
+
+    //Prefab for Board
+    public GameObject boardPrefab;
+
+    //Prefabs for the pieces 
+    public GameObject whitePawnPrefab;
+    public GameObject whiteRookPrefab;
+    public GameObject whiteKnightPrefab;
+    public GameObject whiteBishopPrefab;
+    public GameObject whiteQueenPrefab;
+    public GameObject whiteKingPrefab;
+    public GameObject blackPawnPrefab;
+    public GameObject blackRookPrefab;
+    public GameObject blackKnightPrefab;
+    public GameObject blackBishopPrefab;
+    public GameObject blackQueenPrefab;
+    public GameObject blackKingPrefab;
+    
 
     void Start()
     {
-        InitializeBoard();
+        InstantiateBoard();
+        InstantiatePieces();
     }
 
-    void InitializeBoard()
+    void InstantiateBoard()
     {
-        // Initialize all squares as empty
-        for (int x = 0; x < BoardSize; x++)
-        {
-            for (int y = 0; y < BoardSize; y++)
-            {
-                board[x, y] = new ChessPiece(PieceType.N,
-             PieceColor.None);
-            }
-        }
-
-        // Place white pieces (bottom of the board)
-        board[0, 0] = new ChessPiece(PieceType.R,
-PieceColor.White);
-        board[0, 1] = new ChessPiece(PieceType.N,
-PieceColor.White);
-        board[0, 2] = new ChessPiece(PieceType.B,
-PieceColor.White);
-        board[0, 3] = new ChessPiece(PieceType.Q,
-PieceColor.White);
-        board[0, 4] = new ChessPiece(PieceType.K,
-PieceColor.White);
-        board[0, 5] = new ChessPiece(PieceType.B,
-PieceColor.White);
-        board[0, 6] = new ChessPiece(PieceType.N,
-PieceColor.White);
-        board[0, 7] = new ChessPiece(PieceType.R,
-PieceColor.White);
-
-        for (int y = 0; y < BoardSize; y++)
-        {
-            board[1, y] = new ChessPiece(PieceType.P,
-PieceColor.White);
-        }
-
-        // Place black pieces (top of the board)
-        board[7, 0] = new ChessPiece(PieceType.R,
-PieceColor.Black);
-        board[7, 1] = new ChessPiece(PieceType.N,
-    PieceColor.Black);
-        board[7, 2] = new ChessPiece(PieceType.B,
-    PieceColor.Black);
-        board[7, 3] = new ChessPiece(PieceType.Q,
-    PieceColor.Black);
-        board[7, 4] = new ChessPiece(PieceType.K,
-    PieceColor.Black);
-        board[7, 5] = new ChessPiece(PieceType.B,
-    PieceColor.Black);
-        board[7, 6] = new ChessPiece(PieceType.N,
-    PieceColor.Black);
-        board[7, 7] = new ChessPiece(PieceType.R,
-    PieceColor.Black);
-
-        for (int y = 0; y < BoardSize; y++)
-        {
-            board[6, y] = new ChessPiece(PieceType.P,
-    PieceColor.Black);
-        }
+        Instantiate(boardPrefab, boardOrigin, Quaternion.identity);
+    }
+    void InstantiatePieces()
+    {
+    for (int i = 0; i < 64; i++)
+    {
+        if ((WhitePawn & (1UL << i)) != 0)
+        Instantiate(whitePawnPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+        if ((WhiteRook & (1UL << i)) != 0)
+        Instantiate(whiteRookPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+        if ((WhiteKnight & (1UL << i)) != 0)
+        Instantiate(whiteKnightPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+        if ((WhiteBishop & (1UL << i)) != 0)
+        Instantiate(whiteBishopPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+        if ((WhiteQueen & (1UL << i)) != 0)
+        Instantiate(whiteQueenPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+        if ((WhiteKing & (1UL << i)) != 0)
+        Instantiate(whiteKingPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+        if ((BlackPawn & (1UL << i)) != 0)
+        Instantiate(blackPawnPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+        if ((BlackRook & (1UL << i)) != 0)
+        Instantiate(blackRookPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+        if ((BlackKnight & (1UL << i)) != 0)
+        Instantiate(blackKnightPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+        if ((BlackBishop & (1UL << i)) != 0)
+        Instantiate(blackBishopPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+        if ((BlackQueen & (1UL << i)) != 0)
+        Instantiate(blackQueenPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+        if ((BlackKing & (1UL << i)) != 0)
+        Instantiate(blackKingPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+    }
+    }
+    Vector3 GetWorldPositionForBit(int bitIndex)
+    {
+        int file = bitIndex % 8;
+        int rank = bitIndex / 8;
+        return boardOrigin + new Vector3(file * squareSize, 0f, rank * squareSize);
     }
 }
