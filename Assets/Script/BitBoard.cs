@@ -57,5 +57,8 @@ public class BitBoard
         // Toggle turn back
         whiteTurn = !whiteTurn;
     }
-
+    public ulong[] GetBitBoards()
+    {
+        return bitboards;
+    }
 }

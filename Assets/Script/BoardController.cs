@@ -1,11 +1,12 @@
 using UnityEngine;
 
-public class BoardController : MonoBehaviour
+public class BoardController : MonoBehaviour 
+{
 //The purpose of a BoardController is 
 //- To initialize game board and pieces
 //- To convert AI mvoes into actual moves on the board
 //- To detect whether the color is AI or not, and if it is, to call the AI to get the best move
-{
+
     // Final Vector3 origin for A1 on board
     public Vector3 boardOrigin = new Vector3(0f, 0f, 0f);
 
@@ -14,20 +15,19 @@ public class BoardController : MonoBehaviour
 
     //Prefabs for the game
     public GameObject boardPrefab;
-    public GameObject[] piecePrefabs = [
-        whitePawnPrefab,
-        whiteRookPrefab,
-        whiteKnightPrefab,
-        whiteBishopPrefab,
-        whiteQueenPrefab,
-        whiteKingPrefab,
-        blackPawnPrefab,
-        blackRookPrefab,
-        blackKnightPrefab,
-        blackBishopPrefab,
-        blackQueenPrefab,
-        blackKingPrefab
-    ]; // Array of piece prefabs for white and black
+    public GameObject whitePawnPrefab;
+    public GameObject whiteRookPrefab;
+    public GameObject whiteKnightPrefab;
+    public GameObject whiteBishopPrefab;
+    public GameObject whiteQueenPrefab;
+    public GameObject whiteKingPrefab;
+    public GameObject blackPawnPrefab;
+    public GameObject blackRookPrefab;
+    public GameObject blackKnightPrefab;   
+    public GameObject blackBishopPrefab;
+    public GameObject blackQueenPrefab;
+    public GameObject blackKingPrefab;
+
     // Game state tracking
     private int plyCount = 0;  // Even: white's turn, odd: black's turn
     public bool whiteIsAI = false; // Set to true if white is controlled by AI
@@ -44,11 +44,11 @@ public class BoardController : MonoBehaviour
         
 
         //TODO: Add the initialization function and change the way bitboard is referenced in the script so that it follows the new class rule
-
+        bitboards = new BitBoard();
         // Initialize AI if necessary
-        if ((whiteIsAI && (plyCount % 2 == 0)) || (blackIsAI && (plyCount % 2 == 1)))
+        if (whiteIsAI || blackIsAI)
         {
-            InitializeAI();
+            stockFridge.InitializeAI(plyCount % 2 == 0);
         }
     }
 
@@ -63,35 +63,39 @@ public class BoardController : MonoBehaviour
     {
         Instantiate(boardPrefab, boardOrigin, Quaternion.identity);
     }
-    void InstantiatePieces()
-    {
-    for (int i = 0; i < 64; i++)
-    {
-        if ((WhitePawn & (1UL << i)) != 0)
-        Instantiate(whitePawnPrefab, GetWorldPositionForBit(i), Quaternion.identity);
-        if ((WhiteRook & (1UL << i)) != 0)
-        Instantiate(whiteRookPrefab, GetWorldPositionForBit(i), Quaternion.identity);
-        if ((WhiteKnight & (1UL << i)) != 0)
-        Instantiate(whiteKnightPrefab, GetWorldPositionForBit(i), Quaternion.identity);
-        if ((WhiteBishop & (1UL << i)) != 0)
-        Instantiate(whiteBishopPrefab, GetWorldPositionForBit(i), Quaternion.identity);
-        if ((WhiteQueen & (1UL << i)) != 0)
-        Instantiate(whiteQueenPrefab, GetWorldPositionForBit(i), Quaternion.identity);
-        if ((WhiteKing & (1UL << i)) != 0)
-        Instantiate(whiteKingPrefab, GetWorldPositionForBit(i), Quaternion.identity);
-        if ((BlackPawn & (1UL << i)) != 0)
-        Instantiate(blackPawnPrefab, GetWorldPositionForBit(i), Quaternion.identity);
-        if ((BlackRook & (1UL << i)) != 0)
-        Instantiate(blackRookPrefab, GetWorldPositionForBit(i), Quaternion.identity);
-        if ((BlackKnight & (1UL << i)) != 0)
-        Instantiate(blackKnightPrefab, GetWorldPositionForBit(i), Quaternion.identity);
-        if ((BlackBishop & (1UL << i)) != 0)
-        Instantiate(blackBishopPrefab, GetWorldPositionForBit(i), Quaternion.identity);
-        if ((BlackQueen & (1UL << i)) != 0)
-        Instantiate(blackQueenPrefab, GetWorldPositionForBit(i), Quaternion.identity);
-        if ((BlackKing & (1UL << i)) != 0)
-        Instantiate(blackKingPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+    void InstantiatePieces() {
+        ulong[] pieceLocation = bitboards.GetBitBoards();
+        for (int i = 0; i < 64; i++)
+        {
+            if ((pieceLocation[(int)PieceType.WhitePawn] & (1UL << i)) != 0)
+            Instantiate(whitePawnPrefab, ConvertBitIndexToWorldPosition(i), Quaternion.identity);
+            if ((pieceLocation[(int)PieceType.WhiteRook] & (1UL << i)) != 0)
+            Instantiate(whiteRookPrefab, ConvertBitIndexToWorldPosition(i), Quaternion.identity);
+            if ((pieceLocation[(int)PieceType.WhiteKnight] & (1UL << i)) != 0)
+            Instantiate(whiteKnightPrefab, ConvertBitIndexToWorldPosition(i), Quaternion.identity);
+            if ((pieceLocation[(int)PieceType.WhiteBishop] & (1UL << i)) != 0)
+            Instantiate(whiteBishopPrefab, ConvertBitIndexToWorldPosition(i), Quaternion.identity);
+            if ((pieceLocation[(int)PieceType.WhiteQueen] & (1UL << i)) != 0)
+            Instantiate(whiteQueenPrefab, ConvertBitIndexToWorldPosition(i), Quaternion.identity);
+            if ((pieceLocation[(int)PieceType.WhiteKing] & (1UL << i)) != 0)
+            Instantiate(whiteKingPrefab, ConvertBitIndexToWorldPosition(i), Quaternion.identity);
+            if ((pieceLocation[(int)PieceType.BlackPawn] & (1UL << i)) != 0)
+            Instantiate(blackPawnPrefab, ConvertBitIndexToWorldPosition(i), Quaternion.identity);
+            if ((pieceLocation[(int)PieceType.BlackRook] & (1UL << i)) != 0)
+            Instantiate(blackRookPrefab, ConvertBitIndexToWorldPosition(i), Quaternion.identity);
+            if ((pieceLocation[(int)PieceType.BlackKnight] & (1UL << i)) != 0)
+            Instantiate(blackKnightPrefab, ConvertBitIndexToWorldPosition(i), Quaternion.identity);
+            if ((pieceLocation[(int)PieceType.BlackBishop] & (1UL << i)) != 0)
+            Instantiate(blackBishopPrefab, ConvertBitIndexToWorldPosition(i), Quaternion.identity);
+            if ((pieceLocation[(int)PieceType.BlackQueen] & (1UL << i)) != 0)
+            Instantiate(blackQueenPrefab, ConvertBitIndexToWorldPosition(i), Quaternion.identity);
+            if ((pieceLocation[(int)PieceType.BlackKing] & (1UL << i)) != 0)
+            Instantiate(blackKingPrefab, ConvertBitIndexToWorldPosition(i), Quaternion.identity);
+        }
     }
+
+    
+    
     void InitializeAI()
     {
         if (stockFridge == null)
