@@ -2,7 +2,7 @@ using System;
 
 public class StockFridge { 
     private bool color; // True for white, false for black
-    public void initialize(bool color){
+    public void Initialize(bool color){
         this.color = color;
     }
     public Move FindBestMove(ulong[] currentBitboard, int plyCount) {
