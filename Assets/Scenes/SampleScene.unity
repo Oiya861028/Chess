@@ -119,6 +119,37 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &153978412
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 153978413}
+  m_Layer: 0
+  m_Name: ChessPieces
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &153978413
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 153978412}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -455,6 +486,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e5071caca9cca6d4b83faef52658e635, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  PieceParent: {fileID: 153978413}
   boardPrefab: {fileID: 1825465604218844318, guid: a42c9f4a85c6b72469e1fe380c4adb89, type: 3}
   whitePawnPrefab: {fileID: 2898419483997100597, guid: 7ff1acb28d32c37468778c3831f432c2, type: 3}
   whiteRookPrefab: {fileID: 1156476119602296517, guid: 1c2ad5cb9edb5a04a91bc31d801481ae, type: 3}
@@ -491,3 +523,4 @@ SceneRoots:
   - {fileID: 410087041}
   - {fileID: 832575519}
   - {fileID: 1073159062}
+  - {fileID: 153978413}

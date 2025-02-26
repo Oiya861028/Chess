@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class ChessBoard : MonoBehaviour
+public class BoardController : MonoBehaviour
 {
     // Bitboard for white pieces
     private ulong WhitePawn =   0b0000000000000000000000000000000000000000000000001111111100000000;
@@ -20,6 +20,9 @@ public class ChessBoard : MonoBehaviour
     //Board Dimensions
     private int squareSize = 1;
     private Vector3 boardOrigin = new Vector3(0f, 0f, 0f);
+
+    //Parent location to instantiate pieces
+    public Transform PieceParent;
 
     //Prefab for Board
     public GameObject boardPrefab;
@@ -48,7 +51,6 @@ public class ChessBoard : MonoBehaviour
     {
         if (Input.GetMouseButtonDown(0))
         {
-            Debug.Log("Mouse Clicked");
             HandleClick();
         }
     }
@@ -61,29 +63,29 @@ public class ChessBoard : MonoBehaviour
         for (int i = 0; i < 64; i++)
         {
             if ((WhitePawn & (1UL << i)) != 0)
-            Instantiate(whitePawnPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+            Instantiate(whitePawnPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
             if ((WhiteRook & (1UL << i)) != 0)
-            Instantiate(whiteRookPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+            Instantiate(whiteRookPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
             if ((WhiteKnight & (1UL << i)) != 0)
-            Instantiate(whiteKnightPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+            Instantiate(whiteKnightPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
             if ((WhiteBishop & (1UL << i)) != 0)
-            Instantiate(whiteBishopPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+            Instantiate(whiteBishopPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
             if ((WhiteQueen & (1UL << i)) != 0)
-            Instantiate(whiteQueenPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+            Instantiate(whiteQueenPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
             if ((WhiteKing & (1UL << i)) != 0)
-            Instantiate(whiteKingPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+            Instantiate(whiteKingPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
             if ((BlackPawn & (1UL << i)) != 0)
-            Instantiate(blackPawnPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+            Instantiate(blackPawnPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
             if ((BlackRook & (1UL << i)) != 0)
-            Instantiate(blackRookPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+            Instantiate(blackRookPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
             if ((BlackKnight & (1UL << i)) != 0)
-            Instantiate(blackKnightPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+            Instantiate(blackKnightPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
             if ((BlackBishop & (1UL << i)) != 0)
-            Instantiate(blackBishopPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+            Instantiate(blackBishopPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
             if ((BlackQueen & (1UL << i)) != 0)
-            Instantiate(blackQueenPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+            Instantiate(blackQueenPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
             if ((BlackKing & (1UL << i)) != 0)
-            Instantiate(blackKingPrefab, GetWorldPositionForBit(i), Quaternion.identity);
+            Instantiate(blackKingPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
         }
     }
     void HandleClick()
@@ -92,9 +94,11 @@ public class ChessBoard : MonoBehaviour
         RaycastHit hit;
         if (Physics.Raycast(ray, out hit))
         {
-            if(hit.collider.tag == "ChessPiece")
+            Debug.Log("Clicked on: " + hit.collider.gameObject.name);
+            if(hit.collider.tag == "ChessTile")
             {
-                Debug.Log("Chess Piece Clicked");
+                string index = hit.collider.gameObject.name;
+                Debug.Log("Clicked on tile: " + index);
             }
         }
     }
