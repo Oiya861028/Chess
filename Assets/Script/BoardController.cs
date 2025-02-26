@@ -88,17 +88,54 @@ public class BoardController : MonoBehaviour
             Instantiate(blackKingPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
         }
     }
+
+    private GameObject previouslySelectedTile;
+    private Color previousTileColor;
     void HandleClick()
     {
+        if(previouslySelectedTile != null)
+        {
+            previouslySelectedTile.GetComponent<Renderer>().material.color = previousTileColor;
+            previouslySelectedTile = null;
+        }
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         RaycastHit hit;
         if (Physics.Raycast(ray, out hit))
         {
-            Debug.Log("Clicked on: " + hit.collider.gameObject.name);
             if(hit.collider.tag == "ChessTile")
             {
+                GameObject selectedTile = hit.collider.gameObject;
                 string index = hit.collider.gameObject.name;
-                Debug.Log("Clicked on tile: " + index);
+
+                //Store the selected tile for reversal
+                previouslySelectedTile = selectedTile;
+                previousTileColor = selectedTile.GetComponent<Renderer>().material.color;
+
+                selectedTile.GetComponent<Renderer>().material.color = Color.red; //Highlight the selected tile
+            }
+            else if(hit.collider.tag == "ChessPiece") //In case a piece is clicked
+            {
+                // Cast a ray downward from the piece position to find the tile
+                GameObject selectedPiece = hit.collider.gameObject;
+                Ray downRay = new Ray(selectedPiece.transform.position + Vector3.up, Vector3.down);
+                RaycastHit tileHit;
+                if (Physics.Raycast(downRay, out tileHit, 10f))
+                {
+                    if (tileHit.collider.tag == "ChessTile") 
+                    {
+                        GameObject correspondingTile = tileHit.collider.gameObject;
+
+                        previouslySelectedTile = correspondingTile;
+                        previousTileColor = correspondingTile.GetComponent<Renderer>().material.color;
+                        string tileIndex = correspondingTile.name;
+                        correspondingTile.GetComponent<Renderer>().material.color = Color.red;
+                        Debug.Log("Piece is on tile: " + tileIndex);
+                    }
+                }
+            }
+            else
+            {
+                previouslySelectedTile = null;
             }
         }
     }
