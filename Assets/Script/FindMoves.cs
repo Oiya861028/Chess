@@ -229,3 +229,50 @@ public class FindMoves : MonoBehaviour
             rookMoves |= move;
             if ((allPieces & move) != 0) break; // Hit a piece
         }
+        
+        // Remove squares occupied by friendly pieces
+        rookMoves &= ~friendlyPieces;
+        
+        return rookMoves;
+    }
+    
+    private ulong GetQueenMoves(int position, ulong allPieces, ulong friendlyPieces)
+    {
+        // Queen moves are a combination of rook and bishop moves
+        return GetRookMoves(position, allPieces, friendlyPieces) | GetBishopMoves(position, allPieces, friendlyPieces);
+    }
+    
+    private ulong GetKingMoves(int position, ulong friendlyPieces)
+    {
+        ulong kingPositionBitboard = 1UL << position;
+        ulong kingMoves = 0;
+        
+        // Avoid a-file (leftmost file)
+        ulong notAFile = ~(0b0000000100000001000000010000000100000001000000010000000100000001);
+        // Avoid h-file (rightmost file)
+        ulong notHFile = ~(0b1000000010000000100000001000000010000000100000001000000010000000);
+        
+        // Move in all eight directions:
+        // 1. North (up)
+        kingMoves |= (kingPositionBitboard << 8);
+        // 2. Northeast (up-right)
+        kingMoves |= (kingPositionBitboard << 9) & notAFile;
+        // 3. East (right)
+        kingMoves |= (kingPositionBitboard << 1) & notAFile;
+        // 4. Southeast (down-right)
+        kingMoves |= (kingPositionBitboard >> 7) & notAFile;
+        // 5. South (down)
+        kingMoves |= (kingPositionBitboard >> 8);
+        // 6. Southwest (down-left)
+        kingMoves |= (kingPositionBitboard >> 9) & notHFile;
+        // 7. West (left)
+        kingMoves |= (kingPositionBitboard >> 1) & notHFile;
+        // 8. Northwest (up-left)
+        kingMoves |= (kingPositionBitboard << 7) & notHFile;
+        
+        // Remove squares occupied by friendly pieces
+        kingMoves &= ~friendlyPieces;
+        
+        return kingMoves;
+    }
+}
