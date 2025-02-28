@@ -1,16 +1,15 @@
 using UnityEngine;
-
 public class BoardController : MonoBehaviour
 {
     // Bitboard for white pieces
-    private ulong WhitePawn =   0b0000000000000000000000000000000000000000000000001111111100000000;
+    private ulong WhitePawn =   0b0000000000000000000000000000000000000000000000000000000000000000;
     private ulong WhiteRook =   0b0000000000000000000000000000000000000000000000000000000010000001;
     private ulong WhiteKnight = 0b0000000000000000000000000000000000000000000000000000000001000010;
     private ulong WhiteBishop = 0b0000000000000000000000000000000000000000000000000000000000100100;
     private ulong WhiteQueen =  0b0000000000000000000000000000000000000000000000000000000000010000;
     private ulong WhiteKing =   0b0000000000000000000000000000000000000000000000000000000000001000;
     // Bitboard for black pieces
-    private ulong BlackPawn =   0b0000000011111111000000000000000000000000000000000000000000000000;
+    private ulong BlackPawn =   0b0000000000000000000000000000000000000000000000000000000000000000;
     private ulong BlackRook =   0b1000000100000000000000000000000000000000000000000000000000000000;
     private ulong BlackKnight = 0b0100001000000000000000000000000000000000000000000000000000000000;
     private ulong BlackBishop = 0b0010010000000000000000000000000000000000000000000000000000000000;
@@ -40,12 +39,16 @@ public class BoardController : MonoBehaviour
     public GameObject blackBishopPrefab;
     public GameObject blackQueenPrefab;
     public GameObject blackKingPrefab;
-    
-    //Instantiate All Pieces on Board
+
+    //Utility Functions
+    private FindMoves findMoves;
     void Start()
     {
+        //Instantiate All Pieces on Board   
         InstantiateBoard();
         InstantiatePieces();
+        findMoves = new FindMoves();
+        //Initialize FindMoves
     }
     void Update()
     {
@@ -89,30 +92,34 @@ public class BoardController : MonoBehaviour
         }
     }
 
-    private GameObject previouslySelectedTile;
-    private Color previousTileColor;
+
+    //Information about the Tile clicked
+    private GameObject SelectedTile;
+    private Color TileColor;
+    private int TileIndex;
+
     void HandleClick()
     {
-        if(previouslySelectedTile != null)
+        if(SelectedTile != null) //At the start of each click, if there is a selected tile from last click, revert it back to its original color
         {
-            previouslySelectedTile.GetComponent<Renderer>().material.color = previousTileColor;
-            previouslySelectedTile = null;
+            SelectedTile.GetComponent<Renderer>().material.color = TileColor;
+            SelectedTile = null;
         }
+
+
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         RaycastHit hit;
+
         if (Physics.Raycast(ray, out hit))
         {
+
             if(hit.collider.tag == "ChessTile")
             {
-                GameObject selectedTile = hit.collider.gameObject;
-                string index = hit.collider.gameObject.name;
+                StoreTileInformation(hit);
 
-                //Store the selected tile for reversal
-                previouslySelectedTile = selectedTile;
-                previousTileColor = selectedTile.GetComponent<Renderer>().material.color;
-
-                selectedTile.GetComponent<Renderer>().material.color = Color.red; //Highlight the selected tile
-            }
+                SelectedTile.GetComponent<Renderer>().material.color = Color.red; //Highlight the selected tile
+                DisplayPossibleMoves();
+            }       
             else if(hit.collider.tag == "ChessPiece") //In case a piece is clicked
             {
                 // Cast a ray downward from the piece position to find the tile
@@ -123,19 +130,54 @@ public class BoardController : MonoBehaviour
                 {
                     if (tileHit.collider.tag == "ChessTile") 
                     {
-                        GameObject correspondingTile = tileHit.collider.gameObject;
-
-                        previouslySelectedTile = correspondingTile;
-                        previousTileColor = correspondingTile.GetComponent<Renderer>().material.color;
-                        string tileIndex = correspondingTile.name;
-                        correspondingTile.GetComponent<Renderer>().material.color = Color.red;
-                        Debug.Log("Piece is on tile: " + tileIndex);
+                        StoreTileInformation(tileHit);
+                        SelectedTile.GetComponent<Renderer>().material.color = Color.red;
+                        DisplayPossibleMoves();
                     }
                 }
             }
             else
             {
-                previouslySelectedTile = null;
+                SelectedTile = null;
+                Debug.Log("No Chess Tile Clicked");
+            }
+        }
+    }
+
+    private void StoreTileInformation(RaycastHit hit)
+    {
+        SelectedTile = hit.collider.gameObject;
+        TileColor = SelectedTile.GetComponent<Renderer>().material.color;
+        TileIndex = int.Parse(hit.collider.gameObject.name);
+    }
+    ulong possibleMoves;
+    private void DisplayPossibleMoves()
+    {
+        EraseHighlights();
+        Debug.Log("Tile Index: " + TileIndex);
+        possibleMoves = findMoves.GetPossibleMoves(TileIndex, WhitePawn, WhiteRook, WhiteKnight, WhiteBishop, WhiteQueen, WhiteKing, BlackPawn, BlackRook, BlackKnight, BlackBishop, BlackQueen, BlackKing);
+        Debug.Log(possibleMoves);
+        for (int i = 0; i < 64; i++)
+        {
+            if ((possibleMoves & (1UL << i)) != 0)
+            {
+                GameObject tile = GameObject.Find(i.ToString());
+                tile.GetComponent<Renderer>().material.color = Color.green;
+            }
+        }
+    }
+    private void EraseHighlights()
+    {
+        for (int i = 0; i < 64; i++)
+        {
+            GameObject tile = GameObject.Find(i.ToString());
+            if ((i + i / 8) % 2 == 0)
+            {
+                tile.GetComponent<Renderer>().material.color = Color.white; // White tile
+            }
+            else
+            {
+                tile.GetComponent<Renderer>().material.color = Color.black; // Black tile
             }
         }
     }

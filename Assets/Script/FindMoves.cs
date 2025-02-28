@@ -1,6 +1,4 @@
-using UnityEngine;
-
-public class FindMoves : MonoBehaviour
+public class FindMoves
 {
     // Function to find all possible moves for a piece at a specific position
     public ulong GetPossibleMoves(int position, ulong whitePawn, ulong whiteRook, ulong whiteKnight, ulong whiteBishop, ulong whiteQueen, ulong whiteKing, ulong blackPawn, ulong blackRook, ulong blackKnight, ulong blackBishop, ulong blackQueen, ulong blackKing)
