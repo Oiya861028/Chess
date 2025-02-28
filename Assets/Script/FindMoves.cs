@@ -51,7 +51,7 @@ public class FindMoves : MonoBehaviour
                 pawnMoves |= oneStep;
                 
                 // Move forward two squares (only from the second rank)
-                if ((pawnPositionBitboard & 0b0000000000000000000000000000000000000000000000001111111100000000) != 0)
+                if ((pawnPositionBitboard & 0x000000000000FF00UL) != 0)
                 {
                     ulong twoStep = oneStep << 8;
                     if ((twoStep & allPieces) == 0)
@@ -62,8 +62,8 @@ public class FindMoves : MonoBehaviour
             }
             
             // Capture diagonally
-            ulong captureLeft = (pawnPositionBitboard << 7) & ~0b1000000010000000100000001000000010000000100000001000000010000000; // Avoid wrapping to h-file
-            ulong captureRight = (pawnPositionBitboard << 9) & ~0b0000000100000001000000010000000100000001000000010000000100000001; // Avoid wrapping to a-file
+            ulong captureLeft = (pawnPositionBitboard << 7) & ~0x8080808080808080UL; // Avoid wrapping to h-file
+            ulong captureRight = (pawnPositionBitboard << 9) & ~0x0101010101010101UL; // Avoid wrapping to a-file
             
             pawnMoves |= captureLeft & enemyPieces;
             pawnMoves |= captureRight & enemyPieces;
@@ -77,7 +77,7 @@ public class FindMoves : MonoBehaviour
                 pawnMoves |= oneStep;
                 
                 // Move forward two squares (only from the seventh rank)
-                if ((pawnPositionBitboard & 0b0000000011111111000000000000000000000000000000000000000000000000) != 0)
+                if ((pawnPositionBitboard & 0x00FF000000000000UL) != 0)
                 {
                     ulong twoStep = oneStep >> 8;
                     if ((twoStep & allPieces) == 0)
@@ -88,8 +88,8 @@ public class FindMoves : MonoBehaviour
             }
             
             // Capture diagonally
-            ulong captureLeft = (pawnPositionBitboard >> 9) & ~0b1000000010000000100000001000000010000000100000001000000010000000; // Avoid wrapping to h-file
-            ulong captureRight = (pawnPositionBitboard >> 7) & ~0b0000000100000001000000010000000100000001000000010000000100000001; // Avoid wrapping to a-file
+            ulong captureLeft = (pawnPositionBitboard >> 9) & ~0x8080808080808080UL; // Avoid wrapping to h-file
+            ulong captureRight = (pawnPositionBitboard >> 7) & ~0x0101010101010101UL; // Avoid wrapping to a-file
             
             pawnMoves |= captureLeft & enemyPieces;
             pawnMoves |= captureRight & enemyPieces;
@@ -104,13 +104,13 @@ public class FindMoves : MonoBehaviour
         ulong knightMoves = 0;
         
         // Avoid a-file and b-file (leftmost two files)
-        ulong notABFile = ~(0b0000001100000011000000110000001100000011000000110000001100000011);
+        ulong notABFile = ~0x0303030303030303UL;
         // Avoid a-file (leftmost file)
-        ulong notAFile = ~(0b0000000100000001000000010000000100000001000000010000000100000001);
+        ulong notAFile = ~0x0101010101010101UL;
         // Avoid h-file (rightmost file)
-        ulong notHFile = ~(0b1000000010000000100000001000000010000000100000001000000010000000);
+        ulong notHFile = ~0x8080808080808080UL;
         // Avoid g-file and h-file (rightmost two files)
-        ulong notGHFile = ~(0b1100000011000000110000001100000011000000110000001100000011000000);
+        ulong notGHFile = ~0xC0C0C0C0C0C0C0C0UL;
         
         // Knight move patterns:
         // 1. Up 2, Right 1
@@ -248,9 +248,9 @@ public class FindMoves : MonoBehaviour
         ulong kingMoves = 0;
         
         // Avoid a-file (leftmost file)
-        ulong notAFile = ~(0b0000000100000001000000010000000100000001000000010000000100000001);
+        ulong notAFile = ~0x0101010101010101UL;
         // Avoid h-file (rightmost file)
-        ulong notHFile = ~(0b1000000010000000100000001000000010000000100000001000000010000000);
+        ulong notHFile = ~0x8080808080808080UL;
         
         // Move in all eight directions:
         // 1. North (up)
