@@ -1,20 +1,8 @@
 using UnityEngine;
 public class BoardController : MonoBehaviour
 {
-    // Bitboard for white pieces
-    private ulong WhitePawn =   0b0000000000000000000000000000000000000000000000000000000000000000;
-    private ulong WhiteRook =   0b0000000000000000000000000000000000000000000000000000000010000001;
-    private ulong WhiteKnight = 0b0000000000000000000000000000000000000000000000000000000001000010;
-    private ulong WhiteBishop = 0b0000000000000000000000000000000000000000000000000000000000100100;
-    private ulong WhiteQueen =  0b0000000000000000000000000000000000000000000000000000000000010000;
-    private ulong WhiteKing =   0b0000000000000000000000000000000000000000000000000000000000001000;
-    // Bitboard for black pieces
-    private ulong BlackPawn =   0b0000000000000000000000000000000000000000000000000000000000000000;
-    private ulong BlackRook =   0b1000000100000000000000000000000000000000000000000000000000000000;
-    private ulong BlackKnight = 0b0100001000000000000000000000000000000000000000000000000000000000;
-    private ulong BlackBishop = 0b0010010000000000000000000000000000000000000000000000000000000000;
-    private ulong BlackQueen =  0b0001000000000000000000000000000000000000000000000000000000000000;
-    private ulong BlackKing =   0b0000100000000000000000000000000000000000000000000000000000000000;
+    //Bitboard class that contains the bitboards for the pieces
+    Bitboard bitboard;
 
     //Board Dimensions
     private int squareSize = 1;
@@ -44,11 +32,12 @@ public class BoardController : MonoBehaviour
     private FindMoves findMoves;
     void Start()
     {
+        bitboard = new Bitboard();
+        findMoves = new FindMoves(bitboard);
+        
         //Instantiate All Pieces on Board   
         InstantiateBoard();
         InstantiatePieces();
-        findMoves = new FindMoves();
-        //Initialize FindMoves
     }
     void Update()
     {
@@ -63,6 +52,20 @@ public class BoardController : MonoBehaviour
     }
     void InstantiatePieces()
     {
+        //Get the bitboards for the pieces
+        ulong WhitePawn = bitboard.WhitePawn;
+        ulong WhiteRook = bitboard.WhiteRook;
+        ulong WhiteKnight = bitboard.WhiteKnight;
+        ulong WhiteBishop = bitboard.WhiteBishop;
+        ulong WhiteQueen = bitboard.WhiteQueen;
+        ulong WhiteKing = bitboard.WhiteKing;
+        ulong BlackPawn = bitboard.BlackPawn;
+        ulong BlackRook = bitboard.BlackRook;
+        ulong BlackKnight = bitboard.BlackKnight;
+        ulong BlackBishop = bitboard.BlackBishop;
+        ulong BlackQueen = bitboard.BlackQueen;
+        ulong BlackKing = bitboard.BlackKing;
+        //Instantiate the pieces on the board
         for (int i = 0; i < 64; i++)
         {
             if ((WhitePawn & (1UL << i)) != 0)
@@ -155,7 +158,7 @@ public class BoardController : MonoBehaviour
     {
         EraseHighlights();
         Debug.Log("Tile Index: " + TileIndex);
-        possibleMoves = findMoves.GetPossibleMoves(TileIndex, WhitePawn, WhiteRook, WhiteKnight, WhiteBishop, WhiteQueen, WhiteKing, BlackPawn, BlackRook, BlackKnight, BlackBishop, BlackQueen, BlackKing);
+        possibleMoves = findMoves.GetPossibleMoves(TileIndex);
         Debug.Log(possibleMoves);
         for (int i = 0; i < 64; i++)
         {
