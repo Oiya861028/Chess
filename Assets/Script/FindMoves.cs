@@ -1,15 +1,37 @@
-using UnityEngine;
-
-public class FindMoves : MonoBehaviour
+public class FindMoves
 {
-    // Function to find all possible moves for a piece at a specific position
-    public ulong GetPossibleMoves(int position, ulong whitePawn, ulong whiteRook, ulong whiteKnight, ulong whiteBishop, ulong whiteQueen, ulong whiteKing, ulong blackPawn, ulong blackRook, ulong blackKnight, ulong blackBishop, ulong blackQueen, ulong blackKing)
+    private Bitboard bitboard;
+    public FindMoves(Bitboard bitboard) //pass in the bitboard you created in Controller class 
     {
+        this.bitboard = bitboard;
+    }
+    // Function to find all possible moves for a piece at a specific position
+    public ulong GetPossibleMoves(int position)
+    {
+        // Extract the bitboards for all pieces
+        ulong whitePawn = bitboard.WhitePawn;
+        ulong whiteRook = bitboard.WhiteRook;
+        ulong whiteKnight = bitboard.WhiteKnight;
+        ulong whiteBishop = bitboard.WhiteBishop;
+        ulong whiteQueen = bitboard.WhiteQueen;
+        ulong whiteKing = bitboard.WhiteKing;
+        ulong blackPawn = bitboard.BlackPawn;
+        ulong blackRook = bitboard.BlackRook;
+        ulong blackKnight = bitboard.BlackKnight;
+        ulong blackBishop = bitboard.BlackBishop;
+        ulong blackQueen = bitboard.BlackQueen;
+        ulong blackKing = bitboard.BlackKing;
+        
         // Check if the position contains a piece
         ulong positionMask = 1UL << position;
         
         // Determine the type and color of the piece
-        bool isWhite = (whitePawn & positionMask) != 0 || (whiteRook & positionMask) != 0 || (whiteKnight & positionMask) != 0 || (whiteBishop & positionMask) != 0 || (whiteQueen & positionMask) != 0 || (whiteKing & positionMask) != 0;
+        bool isWhite = (whitePawn & positionMask) != 0 || 
+                        (whiteRook & positionMask) != 0 || 
+                        (whiteKnight & positionMask) != 0 || 
+                        (whiteBishop & positionMask) != 0 || 
+                        (whiteQueen & positionMask) != 0 || 
+                        (whiteKing & positionMask) != 0;
         
         // Compute all pieces on the board
         ulong allWhitePieces = whitePawn | whiteRook | whiteKnight | whiteBishop | whiteQueen | whiteKing;
