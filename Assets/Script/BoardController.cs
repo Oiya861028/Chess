@@ -1,3 +1,5 @@
+using System;
+using Unity.VisualScripting;
 using UnityEngine;
 public class BoardController : MonoBehaviour
 {
@@ -97,15 +99,17 @@ public class BoardController : MonoBehaviour
 
 
     //Information about the Tile clicked
+    private GameObject SelectedPiece;
     private GameObject SelectedTile;
-    private Color TileColor;
+    private Color OriginalTileColor;
     private int TileIndex;
+    private 
 
     void HandleClick()
     {
         if(SelectedTile != null) //At the start of each click, if there is a selected tile from last click, revert it back to its original color
         {
-            SelectedTile.GetComponent<Renderer>().material.color = TileColor;
+            SelectedTile.GetComponent<Renderer>().material.color = OriginalTileColor;
             SelectedTile = null;
         }
 
@@ -115,43 +119,90 @@ public class BoardController : MonoBehaviour
 
         if (Physics.Raycast(ray, out hit))
         {
-
-            if(hit.collider.tag == "ChessTile")
+            //TODO: Only highlight if it's the piece's turn
+            if(hit.collider.CompareTag("ChessTile"))
             {
-                StoreTileInformation(hit);
 
-                SelectedTile.GetComponent<Renderer>().material.color = Color.red; //Highlight the selected tile
-                DisplayPossibleMoves();
-            }       
-            else if(hit.collider.tag == "ChessPiece") //In case a piece is clicked
-            {
-                // Cast a ray downward from the piece position to find the tile
-                GameObject selectedPiece = hit.collider.gameObject;
-                Ray downRay = new Ray(selectedPiece.transform.position + Vector3.up, Vector3.down);
-                RaycastHit tileHit;
-                if (Physics.Raycast(downRay, out tileHit, 10f))
+                ExtractCellInfo(hit, true);
+                if((possibleMoves & (1UL << TileIndex)) != 0) //If the tile clicked is a possible move
                 {
-                    if (tileHit.collider.tag == "ChessTile") 
-                    {
-                        StoreTileInformation(tileHit);
-                        SelectedTile.GetComponent<Renderer>().material.color = Color.red;
-                        DisplayPossibleMoves();
-                    }
+                    Debug.Log("Move Made. Index: " + TileIndex);
+                    UpdateBoard();
+                    EraseHighlights();
+                }
+                else{
+                    SelectedTile.GetComponent<Renderer>().material.color = Color.red; //Highlight the selected tile
+                    DisplayPossibleMoves();
+                }
+            }       
+            else if(hit.collider.CompareTag("ChessPiece")) //In case a piece is clicked
+            {
+                ExtractCellInfo(hit, false);
+                if((possibleMoves & (1UL << TileIndex)) != 0) //If the tile clicked is a possible move
+                {
+                    Debug.Log("Move Made. Index: " + TileIndex);
+                    EraseHighlights();
+                }
+                else{
+                    SelectedTile.GetComponent<Renderer>().material.color = Color.red; //Highlight the selected tile
+                    DisplayPossibleMoves();
                 }
             }
             else
             {
-                SelectedTile = null;
                 Debug.Log("No Chess Tile Clicked");
+                
             }
         }
     }
 
-    private void StoreTileInformation(RaycastHit hit)
+    private void UpdateBoard()
     {
-        SelectedTile = hit.collider.gameObject;
-        TileColor = SelectedTile.GetComponent<Renderer>().material.color;
-        TileIndex = int.Parse(hit.collider.gameObject.name);
+        //TODO: Update the bitboard
+        UpdateBitboard();
+
+        //TODO: Update the physical piece on board
+        UpdatePiece();
+    }
+
+    private void UpdatePiece()
+    {
+        SelectedPiece.transform.position = GetWorldPositionForBit(TileIndex);
+        
+    }
+
+    private void UpdateBitboard()
+    {
+        throw new NotImplementedException();
+    }
+
+    private void ExtractCellInfo(RaycastHit hit, bool isTileHit)
+    {
+        //In order to find both piece and tile, we need to check if the hit is on a tile or a piece
+        if(isTileHit){
+            SelectedTile = hit.collider.gameObject;
+            Ray upRay = new(SelectedTile.transform.position + Vector3.up, Vector3.down);
+            if (Physics.Raycast(upRay, out RaycastHit pieceHit, 10f))
+            {
+                if (pieceHit.collider.tag == "ChessPiece")
+                {
+                    SelectedPiece = pieceHit.collider.gameObject;
+                }
+            }
+        }
+        else{
+            SelectedPiece = hit.collider.gameObject;
+            Ray downRay = new(SelectedPiece.transform.position + Vector3.up, Vector3.down);
+            if (Physics.Raycast(downRay, out RaycastHit tileHit, 10f))
+            {
+                if (tileHit.collider.tag == "ChessTile")
+                {
+                    SelectedTile = tileHit.collider.gameObject;
+                }
+            }
+        }
+        OriginalTileColor = SelectedTile.GetComponent<Renderer>().material.color;
+        TileIndex = int.Parse(SelectedTile.name);
     }
     ulong possibleMoves;
     private void DisplayPossibleMoves()
