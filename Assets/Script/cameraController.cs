@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class cameraController : MonoBehaviour
+public class CameraController : MonoBehaviour
 {
     [SerializeField] private float moveSpeed = 10f;
     [SerializeField] private float rotationSpeed = 2f;
@@ -24,7 +24,16 @@ public class cameraController : MonoBehaviour
             Cursor.lockState = cameraControlEnabled ? CursorLockMode.Locked : CursorLockMode.None;
             Cursor.visible = !cameraControlEnabled;
         }
-
+        // Reset camera to face black pawns
+        if(Input.GetKeyDown(KeyCode.B))
+        {
+            transform.SetPositionAndRotation(new Vector3(4, 10, -3.5f), Quaternion.Euler(60f, 0f, 0f));
+        }
+        // Reset camera to face white pawns
+        if(Input.GetKeyDown(KeyCode.R))
+        {
+            transform.SetPositionAndRotation(new Vector3(4, 10, 10.5f), Quaternion.Euler(60f, 180f, 0f));
+        }
         // Only process camera movement when control is enabled
         if (cameraControlEnabled)
         {
