@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using UnityEngine;
 
+//WASDQE to move the camera, Left Shift to enable/disable camera control, B to face black pawns, R to face white pawns
 public class CameraController : MonoBehaviour
 {
     [SerializeField] private float moveSpeed = 10f;
