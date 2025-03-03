@@ -10,6 +10,8 @@ public class CameraController : MonoBehaviour
     private float rotationX, rotationY;
     private bool cameraControlEnabled = false;
 
+    private bool isWhite = true;
+
     void Start()
     {
         // Start with cursor visible and unlocked for piece selection
@@ -26,15 +28,18 @@ public class CameraController : MonoBehaviour
             Cursor.lockState = cameraControlEnabled ? CursorLockMode.Locked : CursorLockMode.None;
             Cursor.visible = !cameraControlEnabled;
         }
-        // Reset camera to face black pawns
-        if(Input.GetKeyDown(KeyCode.B))
-        {
-            transform.SetPositionAndRotation(new Vector3(4, 10, -3.5f), Quaternion.Euler(60f, 0f, 0f));
-        }
         // Reset camera to face white pawns
         if(Input.GetKeyDown(KeyCode.R))
         {
-            transform.SetPositionAndRotation(new Vector3(4, 10, 10.5f), Quaternion.Euler(60f, 180f, 0f));
+            if (isWhite)
+            {
+                transform.SetPositionAndRotation(new Vector3(3, 10, 10.5f), Quaternion.Euler(60f, 180f, 0f));
+            }
+            else
+            {
+                transform.SetPositionAndRotation(new Vector3(4, 10, -3.5f), Quaternion.Euler(60f, 0f, 0f));
+            }
+            isWhite = !isWhite;
         }
         // Only process camera movement when control is enabled
         if (cameraControlEnabled)
