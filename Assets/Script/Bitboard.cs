@@ -1,4 +1,5 @@
 using UnityEngine.Scripting.APIUpdating;
+using UnityEngine.UIElements;
 
 public class Bitboard {
     // Bitboard for white pieces
@@ -19,7 +20,25 @@ public class Bitboard {
     public Bitboard() {
         previousMove = null;
     }
-
+    //Utility functions
+    public ulong[] returnWhitePiecesByTypes(){
+        ulong[] whitePieces = {WhitePawn, WhiteRook, WhiteKnight, WhiteBishop, WhiteQueen, WhiteKing};
+        return whitePieces;
+    }
+    public ulong[] returnBlackPiecesByTypes(){
+        ulong[] blackPieces = {BlackPawn, BlackRook, BlackKnight, BlackBishop, BlackQueen, BlackKing};
+        return blackPieces;
+    }
+    public ulong returnAllWhitePieces(){
+        return WhitePawn | WhiteRook | WhiteKnight | WhiteBishop | WhiteQueen | WhiteKing;
+    }
+    public ulong returnAllBlackPieces(){
+        return BlackPawn | BlackRook | BlackKnight | BlackBishop | BlackQueen | BlackKing;
+    }   
+    public ulong returnAllPieces(){
+        return WhitePawn | WhiteRook | WhiteKnight | WhiteBishop | WhiteQueen | WhiteKing | BlackPawn | BlackRook | BlackKnight | BlackBishop | BlackQueen | BlackKing;
+    }
+    
     public void UpdateBitBoard(Move move) {
         // Update the board following the move 
         // Assuming move contains source and destination positions and piece type
@@ -147,5 +166,6 @@ public class Bitboard {
                 else BlackKing |= sourceMask;
                 break;
         }
+        previousMove = previousMove.previousMove; //set the previous move to the move before the last move
     }
 }

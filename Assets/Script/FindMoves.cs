@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 public class FindMoves
 {
     private Bitboard bitboard;
@@ -5,6 +8,71 @@ public class FindMoves
     {
         this.bitboard = bitboard;
     }
+    public List<Move> GetAllPossibleMoves(bool isWhite, Move previousMove)
+    {
+       
+        return (isWhite) ? GetAllPossibleWhiteMoves(previousMove) : GetAllPossibleBlackMoves(previousMove);
+        
+    }
+    //Return a list of all possible moves for white pieces
+    private List<Move> GetAllPossibleWhiteMoves(Move previousMove)
+    {
+        List<Move> allPossibleWhiteMoves = new List<Move>();
+        ulong currentPieces = bitboard.WhitePawn | bitboard.WhiteRook | bitboard.WhiteKnight | 
+                              bitboard.WhiteBishop | bitboard.WhiteQueen | bitboard.WhiteKing;
+        
+        for(int i = 0; i < 64; i++){
+            ulong positionMask = 1UL << i;
+            if((currentPieces & positionMask) != 0){
+                PieceType pieceType;
+                if((bitboard.WhitePawn & positionMask) != 0) pieceType = PieceType.Pawn;
+                else if((bitboard.WhiteRook & positionMask) != 0) pieceType = PieceType.Rook;
+                else if((bitboard.WhiteKnight & positionMask) != 0) pieceType = PieceType.Knight;
+                else if((bitboard.WhiteBishop & positionMask) != 0) pieceType = PieceType.Bishop;
+                else if((bitboard.WhiteQueen & positionMask) != 0) pieceType = PieceType.Queen;
+                else pieceType = PieceType.King;
+
+                ulong possibleMoves = GetPossibleMoves(i);
+
+                for(int j = 0; j < 64; j++){
+                    if((possibleMoves & (1UL << j)) != 0){
+                        allPossibleWhiteMoves.Add(new Move(i, j, previousMove, (int)pieceType, true));
+                    }
+                }
+            }
+        }
+        return allPossibleWhiteMoves;
+    }
+    //Return a list of all possible moves for black pieces
+    private List<Move> GetAllPossibleBlackMoves(Move previousMove)
+    {
+        ulong currentPieces = bitboard.BlackPawn | bitboard.BlackRook | bitboard.BlackKnight | 
+                              bitboard.BlackBishop | bitboard.BlackQueen | bitboard.BlackKing;
+
+        List<Move> allPossibleBlackMoves = new List<Move>();
+        for(int i = 0; i < 64; i++){
+            ulong positionMask = 1UL << i;
+            if((currentPieces & positionMask) != 0){
+                PieceType pieceType;
+                if((bitboard.BlackPawn & positionMask) != 0) pieceType = PieceType.Pawn;
+                else if((bitboard.BlackRook & positionMask) != 0) pieceType = PieceType.Rook;
+                else if((bitboard.BlackKnight & positionMask) != 0) pieceType = PieceType.Knight;
+                else if((bitboard.BlackBishop & positionMask) != 0) pieceType = PieceType.Bishop;
+                else if((bitboard.BlackQueen & positionMask) != 0) pieceType = PieceType.Queen;
+                else pieceType = PieceType.King;
+
+                ulong possibleMoves = GetPossibleMoves(i);
+
+                for(int j = 0; j < 64; j++){
+                    if((possibleMoves & (1UL << j)) != 0){
+                        allPossibleBlackMoves.Add(new Move(i, j, previousMove, (int)pieceType, false));
+                    }
+                }
+            }
+        }
+        return allPossibleBlackMoves;
+    }
+    
     // Function to find all possible moves for a piece at a specific position
     public ulong GetPossibleMoves(int position)
     {
@@ -25,7 +93,7 @@ public class FindMoves
         // Check if the position contains a piece
         ulong positionMask = 1UL << position;
         
-        // Determine the type and color of the piece
+        // Determine the color of the piece
         bool isWhite = (whitePawn & positionMask) != 0 || 
                         (whiteRook & positionMask) != 0 || 
                         (whiteKnight & positionMask) != 0 || 

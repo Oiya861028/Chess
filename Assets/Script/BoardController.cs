@@ -3,6 +3,8 @@ public class BoardController : MonoBehaviour
 {
     //Bitboard class that contains the bitboards for the pieces
     Bitboard bitboard;
+    //half pli, which I call a move, that precedes the current board state
+    Move previousMove;
 
     //Board Dimensions
     private int squareSize = 1;
@@ -40,9 +42,16 @@ public class BoardController : MonoBehaviour
     private PieceType selectedPieceType;
     private bool selectedPieceIsWhite;
 
+    //AI
+    private StockFridge AI;
+    public bool isAIWhite = false;
+    public bool isAIBlack = true;
+    public int depth = 3;
+
     void Start()
     {
         bitboard = new Bitboard();
+        previousMove = null;
         findMoves = new FindMoves(bitboard);
         
         //Instantiate All Pieces on Board   
@@ -52,6 +61,9 @@ public class BoardController : MonoBehaviour
         // Print the initial board layout for debugging
         Debug.Log("Initial board setup:");
         DebugPrintBoard();
+
+        //Instantiate the AI
+        AI = new StockFridge(findMoves, bitboard);
     }
     
     // Print the current board state for debugging
@@ -89,12 +101,53 @@ public class BoardController : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetMouseButtonDown(0))
+        // Only handle clicks during white's turn
+        if (Input.GetMouseButtonDown(0) && isWhiteTurn)
         {
             HandleClick();
         }
+        // Let AI play black's turn
+        else if (!isWhiteTurn)
+        {
+            MakeAIMove();
+        }
+        
     }
+    private void MakeAIMove()
+    {
+        // Get the best move from StockFridge
+        Move aiMove = AI.GetBestMove(4, false, previousMove); // depth of 4, playing as black
+        
+        if (aiMove != null)
+        {
+            // Find the piece at the source position
+            selectedPiece = FindPieceAtPosition(aiMove.Source);
+            if (selectedPiece != null)
+            {
+                selectedPieceIndex = aiMove.Source;
+                selectedPieceType = (PieceType)aiMove.PieceType;
+                selectedPieceIsWhite = false;
 
+                // Make the move
+                MovePiece(aiMove.Source, aiMove.Destination);
+                
+                // Clean up and switch turns
+                EraseHighlights();
+                selectedPiece = null;
+                selectedPieceIndex = -1;
+                possibleMoves = 0;
+                isWhiteTurn = true;
+                
+                Debug.Log("AI moved from " + GetAlgebraicNotation(aiMove.Source) + 
+                         " to " + GetAlgebraicNotation(aiMove.Destination));
+            }
+            previousMove = aiMove;
+        }
+        else
+        {
+            Debug.LogError("AI couldn't find a valid move!");
+        }
+    }
     void InstantiateBoard()
     {
         Instantiate(boardPrefab, boardOrigin, Quaternion.identity);
@@ -414,8 +467,11 @@ public class BoardController : MonoBehaviour
         }
         
         // Move the piece in the bitboard
-        Move move = new Move(fromIndex, toIndex, null, (int)selectedPieceType, selectedPieceIsWhite);
+        Move move = new Move(fromIndex, toIndex, previousMove, (int)selectedPieceType, selectedPieceIsWhite);
         bitboard.UpdateBitBoard(move);
+
+        //Update the Move in the previousMove to keep track of the move that got to the current board state
+        previousMove = move;
         
         // Calculate the exact world position for the destination
         Vector3 destinationPosition = GetWorldPositionForBit(toIndex);

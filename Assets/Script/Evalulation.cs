@@ -364,7 +364,33 @@ public class Evaluation : MonoBehaviour
     {
         return new Score(mg, eg);
     }
+    public bool IsInCheck(bool isWhite, ulong[] whitePieces, ulong[] blackPieces, ulong allPieces)
+    {
+        int kingSq = BitOperations.TrailingZeroCount(isWhite ? whitePieces[KING] : blackPieces[KING]);
+        int enemySide = isWhite ? BLACK : WHITE;
     
+        // Check for pawn attacks
+        if ((PawnAttacks[enemySide * 64 + kingSq] & (isWhite ? blackPieces[PAWN] : whitePieces[PAWN])) != 0)
+            return true;
+    
+        // Check for knight attacks
+        if ((KnightAttacks[kingSq] & (isWhite ? blackPieces[KNIGHT] : whitePieces[KNIGHT])) != 0)
+            return true;
+    
+        // Check for bishop/queen diagonal attacks
+        ulong bishopAttacks = CalculateBishopAttacks(kingSq, allPieces);
+        if ((bishopAttacks & (isWhite ? (blackPieces[BISHOP] | blackPieces[QUEEN]) : 
+                                       (whitePieces[BISHOP] | whitePieces[QUEEN]))) != 0)
+            return true;
+    
+        // Check for rook/queen straight attacks
+        ulong rookAttacks = CalculateRookAttacks(kingSq, allPieces);
+        if ((rookAttacks & (isWhite ? (blackPieces[ROOK] | blackPieces[QUEEN]) : 
+                                     (whitePieces[ROOK] | whitePieces[QUEEN]))) != 0)
+            return true;
+    
+        return false;
+    }
     // Main evaluation function
     public int EvaluatePosition(
         ulong whitePawn, ulong whiteKnight, ulong whiteBishop, ulong whiteRook, ulong whiteQueen, ulong whiteKing,
