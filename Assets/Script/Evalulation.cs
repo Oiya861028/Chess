@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-public class Evaluation : MonoBehaviour
+public class Evaluation
 {
     // Piece values for middlegame and endgame
     private static readonly int[] PieceValueMg = { 0, 126, 781, 825, 1276, 2538 }; // None, Pawn, Knight, Bishop, Rook, Queen
@@ -156,13 +156,13 @@ public class Evaluation : MonoBehaviour
     private const int KING = 6;
     private const int ALL_PIECES = 0;
     
-    // Initialize attack tables
-    void Awake()
+    // Constructor - initialize attack tables
+    public Evaluation()
     {
         InitializeAttackTables();
     }
     
-    private void InitializeAttackTables()
+    public void InitializeAttackTables()
     {
         // Initialize Knight attack table
         for (int sq = 0; sq < 64; sq++)
@@ -365,32 +365,45 @@ public class Evaluation : MonoBehaviour
         return new Score(mg, eg);
     }
     public bool IsInCheck(bool isWhite, ulong[] whitePieces, ulong[] blackPieces, ulong allPieces)
-    {
-        int kingSq = BitOperations.TrailingZeroCount(isWhite ? whitePieces[KING] : blackPieces[KING]);
-        int enemySide = isWhite ? BLACK : WHITE;
-    
-        // Check for pawn attacks
-        if ((PawnAttacks[enemySide * 64 + kingSq] & (isWhite ? blackPieces[PAWN] : whitePieces[PAWN])) != 0)
-            return true;
-    
-        // Check for knight attacks
-        if ((KnightAttacks[kingSq] & (isWhite ? blackPieces[KNIGHT] : whitePieces[KNIGHT])) != 0)
-            return true;
-    
-        // Check for bishop/queen diagonal attacks
-        ulong bishopAttacks = CalculateBishopAttacks(kingSq, allPieces);
-        if ((bishopAttacks & (isWhite ? (blackPieces[BISHOP] | blackPieces[QUEEN]) : 
-                                       (whitePieces[BISHOP] | whitePieces[QUEEN]))) != 0)
-            return true;
-    
-        // Check for rook/queen straight attacks
-        ulong rookAttacks = CalculateRookAttacks(kingSq, allPieces);
-        if ((rookAttacks & (isWhite ? (blackPieces[ROOK] | blackPieces[QUEEN]) : 
-                                     (whitePieces[ROOK] | whitePieces[QUEEN]))) != 0)
-            return true;
-    
+{
+    // Sanity check to prevent array index out of bounds
+    if (whitePieces == null || whitePieces.Length < 7 || blackPieces == null || blackPieces.Length < 7) {
+        Debug.LogError("Invalid piece arrays passed to IsInCheck. Arrays must have at least 7 elements.");
         return false;
     }
+
+    // Get king square - make sure the king exists
+    ulong kingBitboard = isWhite ? whitePieces[KING] : blackPieces[KING];
+    if (kingBitboard == 0) {
+        Debug.LogError("No king found for " + (isWhite ? "white" : "black") + " in IsInCheck!");
+        return false;
+    }
+
+    int kingSq = BitOperations.TrailingZeroCount(kingBitboard);
+    int enemySide = isWhite ? BLACK : WHITE;
+
+    // Check for pawn attacks
+    if ((PawnAttacks[enemySide * 64 + kingSq] & (isWhite ? blackPieces[PAWN] : whitePieces[PAWN])) != 0)
+        return true;
+
+    // Check for knight attacks
+    if ((KnightAttacks[kingSq] & (isWhite ? blackPieces[KNIGHT] : whitePieces[KNIGHT])) != 0)
+        return true;
+
+    // Check for bishop/queen diagonal attacks
+    ulong bishopAttacks = CalculateBishopAttacks(kingSq, allPieces);
+    if ((bishopAttacks & (isWhite ? (blackPieces[BISHOP] | blackPieces[QUEEN]) : 
+                                   (whitePieces[BISHOP] | whitePieces[QUEEN]))) != 0)
+        return true;
+
+    // Check for rook/queen straight attacks
+    ulong rookAttacks = CalculateRookAttacks(kingSq, allPieces);
+    if ((rookAttacks & (isWhite ? (blackPieces[ROOK] | blackPieces[QUEEN]) : 
+                                 (whitePieces[ROOK] | whitePieces[QUEEN]))) != 0)
+        return true;
+
+    return false;
+}
     // Main evaluation function
     public int EvaluatePosition(
         ulong whitePawn, ulong whiteKnight, ulong whiteBishop, ulong whiteRook, ulong whiteQueen, ulong whiteKing,

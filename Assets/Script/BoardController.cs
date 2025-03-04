@@ -1,8 +1,11 @@
 using UnityEngine;
+using System;
+using System.Collections.Generic;
 public class BoardController : MonoBehaviour
 {
     //Bitboard class that contains the bitboards for the pieces
     Bitboard bitboard;
+    public bool debugMode = true;
     //half pli, which I call a move, that precedes the current board state
     Move previousMove;
 
@@ -32,6 +35,7 @@ public class BoardController : MonoBehaviour
 
     //Utility Functions
     private FindMoves findMoves;
+    private Evaluation evaluation; // Add an Evaluation instance
 
     // Track current player's turn (true = white, false = black)
     private bool isWhiteTurn = true;
@@ -52,6 +56,7 @@ public class BoardController : MonoBehaviour
     {
         bitboard = new Bitboard();
         previousMove = null;
+        evaluation = new Evaluation(); // Initialize the evaluation object
         findMoves = new FindMoves(bitboard);
         
         //Instantiate All Pieces on Board   
@@ -69,85 +74,246 @@ public class BoardController : MonoBehaviour
     // Print the current board state for debugging
     private void DebugPrintBoard()
     {
-        for (int rank = 7; rank >= 0; rank--)
+    if (!debugMode) return;
+    
+    Debug.Log("--------- CURRENT BOARD STATE ---------");
+    for (int rank = 7; rank >= 0; rank--)
+    {
+        string rankStr = (rank+1) + " ";
+        for (int file = 0; file < 8; file++)
         {
-            string rankStr = (rank+1) + " ";
-            for (int file = 0; file < 8; file++)
-            {
-                int index = rank * 8 + file;
-                ulong mask = 1UL << index;
-                
-                char piece = '.';
-                
-                if ((bitboard.WhitePawn & mask) != 0) piece = 'P';
-                else if ((bitboard.WhiteRook & mask) != 0) piece = 'R';
-                else if ((bitboard.WhiteKnight & mask) != 0) piece = 'N';
-                else if ((bitboard.WhiteBishop & mask) != 0) piece = 'B';
-                else if ((bitboard.WhiteQueen & mask) != 0) piece = 'Q';
-                else if ((bitboard.WhiteKing & mask) != 0) piece = 'K';
-                else if ((bitboard.BlackPawn & mask) != 0) piece = 'p';
-                else if ((bitboard.BlackRook & mask) != 0) piece = 'r';
-                else if ((bitboard.BlackKnight & mask) != 0) piece = 'n';
-                else if ((bitboard.BlackBishop & mask) != 0) piece = 'b';
-                else if ((bitboard.BlackQueen & mask) != 0) piece = 'q';
-                else if ((bitboard.BlackKing & mask) != 0) piece = 'k';
-                
-                rankStr += piece + " ";
-            }
-            Debug.Log(rankStr);
+            int index = rank * 8 + file;
+            ulong mask = 1UL << index;
+            
+            char piece = '.';
+            
+            if ((bitboard.WhitePawn & mask) != 0) piece = 'P';
+            else if ((bitboard.WhiteRook & mask) != 0) piece = 'R';
+            else if ((bitboard.WhiteKnight & mask) != 0) piece = 'N';
+            else if ((bitboard.WhiteBishop & mask) != 0) piece = 'B';
+            else if ((bitboard.WhiteQueen & mask) != 0) piece = 'Q';
+            else if ((bitboard.WhiteKing & mask) != 0) piece = 'K';
+            else if ((bitboard.BlackPawn & mask) != 0) piece = 'p';
+            else if ((bitboard.BlackRook & mask) != 0) piece = 'r';
+            else if ((bitboard.BlackKnight & mask) != 0) piece = 'n';
+            else if ((bitboard.BlackBishop & mask) != 0) piece = 'b';
+            else if ((bitboard.BlackQueen & mask) != 0) piece = 'q';
+            else if ((bitboard.BlackKing & mask) != 0) piece = 'k';
+            
+            rankStr += piece + " ";
         }
-        Debug.Log("  a b c d e f g h");
+        Debug.Log(rankStr);
     }
+    Debug.Log("  a b c d e f g h");
+    Debug.Log("--------------------------------------");
+    }
+    private bool IsInCheck(bool isWhite)
+    {
+        return evaluation.IsInCheck(isWhite, 
+                                bitboard.returnWhitePiecesByTypes(), 
+                                bitboard.returnBlackPiecesByTypes(), 
+                                bitboard.returnAllPieces());
+    }
+
+
+    private bool IsMoveLegal(int fromIndex, int toIndex)
+    {
+        if (!debugMode) return true;
+        
+        // Check if the source square has a piece
+        ulong sourceMask = 1UL << fromIndex;
+        bool isWhitePiece = 
+            (bitboard.WhitePawn & sourceMask) != 0 ||
+            (bitboard.WhiteRook & sourceMask) != 0 ||
+            (bitboard.WhiteKnight & sourceMask) != 0 ||
+            (bitboard.WhiteBishop & sourceMask) != 0 ||
+            (bitboard.WhiteQueen & sourceMask) != 0 ||
+            (bitboard.WhiteKing & sourceMask) != 0;
+        
+        bool isBlackPiece = 
+            (bitboard.BlackPawn & sourceMask) != 0 ||
+            (bitboard.BlackRook & sourceMask) != 0 ||
+            (bitboard.BlackKnight & sourceMask) != 0 ||
+            (bitboard.BlackBishop & sourceMask) != 0 ||
+            (bitboard.BlackQueen & sourceMask) != 0 ||
+            (bitboard.BlackKing & sourceMask) != 0;
+        
+        if (!isWhitePiece && !isBlackPiece)
+        {
+            Debug.LogError($"No piece at source square {GetAlgebraicNotation(fromIndex)}");
+            return false;
+        }
+        
+        // Check if the destination is a valid move
+        ulong possibleMoves = findMoves.GetPossibleMoves(fromIndex);
+        bool isValidMove = (possibleMoves & (1UL << toIndex)) != 0;
+        
+        if (!isValidMove)
+        {
+            Debug.LogError($"Invalid move from {GetAlgebraicNotation(fromIndex)} to {GetAlgebraicNotation(toIndex)}");
+            return false;
+        }
+        
+        // Check if the move would leave the king in check
+        // First determine piece type
+        PieceType pieceType = PieceType.Pawn; // Default
+        if ((bitboard.WhitePawn & sourceMask) != 0 || (bitboard.BlackPawn & sourceMask) != 0)
+            pieceType = PieceType.Pawn;
+        else if ((bitboard.WhiteRook & sourceMask) != 0 || (bitboard.BlackRook & sourceMask) != 0)
+            pieceType = PieceType.Rook;
+        else if ((bitboard.WhiteKnight & sourceMask) != 0 || (bitboard.BlackKnight & sourceMask) != 0)
+            pieceType = PieceType.Knight;
+        else if ((bitboard.WhiteBishop & sourceMask) != 0 || (bitboard.BlackBishop & sourceMask) != 0)
+            pieceType = PieceType.Bishop;
+        else if ((bitboard.WhiteQueen & sourceMask) != 0 || (bitboard.BlackQueen & sourceMask) != 0)
+            pieceType = PieceType.Queen;
+        else if ((bitboard.WhiteKing & sourceMask) != 0 || (bitboard.BlackKing & sourceMask) != 0)
+            pieceType = PieceType.King;
+        
+        // Create a move object
+        Move move = new Move(fromIndex, toIndex, previousMove, (int)pieceType, isWhitePiece);
+        
+        // Make the move
+        bitboard.UpdateBitBoard(move);
+        
+        // Check if the king is in check
+        ulong[] whitePieces = bitboard.returnWhitePiecesByTypes();
+        ulong[] blackPieces = bitboard.returnBlackPiecesByTypes();
+        ulong allPieces = bitboard.returnAllPieces();
+        
+        bool kingInCheck = evaluation.IsInCheck(isWhitePiece, whitePieces, blackPieces, allPieces);
+        
+        // Undo the move
+        bitboard.UndoBitboard();
+        
+        if (kingInCheck)
+        {
+            Debug.LogError($"Move would leave king in check: {GetAlgebraicNotation(fromIndex)} to {GetAlgebraicNotation(toIndex)}");
+            return false;
+        }
+        
+        return true;
+    }
+    private bool aiIsThinking = false;
 
     void Update()
     {
-        // Only handle clicks during white's turn
+        // Check for checkmate for the current player
+        if (isWhiteTurn && DetectCheckmate(true))
+        {
+            Debug.Log("Checkmate! Black wins!");
+            // You could add game over UI elements or other handling here
+        }
+        else if (!isWhiteTurn && DetectCheckmate(false))
+        {
+            Debug.Log("Checkmate! White wins!");
+            // You could add game over UI elements or other handling here
+        }
+        
+        // Rest of Update method
         if (Input.GetMouseButtonDown(0) && isWhiteTurn)
         {
             HandleClick();
         }
-        // Let AI play black's turn
-        else if (!isWhiteTurn)
+        else if (!isWhiteTurn && !aiIsThinking) // Assuming you've added aiIsThinking from previous fixes
         {
+            aiIsThinking = true;
             MakeAIMove();
         }
-        
     }
+
     private void MakeAIMove()
     {
-        // Get the best move from StockFridge
-        Move aiMove = AI.GetBestMove(4, false, previousMove); // depth of 4, playing as black
-        
-        if (aiMove != null)
+        try
         {
-            // Find the piece at the source position
-            selectedPiece = FindPieceAtPosition(aiMove.Source);
-            if (selectedPiece != null)
+            // Get the best move from StockFridge
+            Move aiMove = AI.GetBestMove(depth, false, previousMove);
+            
+            if (aiMove != null)
             {
-                selectedPieceIndex = aiMove.Source;
-                selectedPieceType = (PieceType)aiMove.PieceType;
-                selectedPieceIsWhite = false;
+                // Find the piece at the source position
+                selectedPiece = FindPieceAtPosition(aiMove.Source);
+                if (selectedPiece != null)
+                {
+                    // Verify the piece is actually black (add this check)
+                    if (!selectedPiece.name.StartsWith("Black"))
+                    {
+                        Debug.LogError("AI tried to move a white piece: " + selectedPiece.name);
+                        isWhiteTurn = true;
+                        aiIsThinking = false;
+                        return;
+                    }
+                    
+                    selectedPieceIndex = aiMove.Source;
+                    selectedPieceType = (PieceType)aiMove.PieceType;
+                    selectedPieceIsWhite = false;
 
-                // Make the move
-                MovePiece(aiMove.Source, aiMove.Destination);
-                
-                // Clean up and switch turns
-                EraseHighlights();
-                selectedPiece = null;
-                selectedPieceIndex = -1;
-                possibleMoves = 0;
-                isWhiteTurn = true;
-                
-                Debug.Log("AI moved from " + GetAlgebraicNotation(aiMove.Source) + 
-                         " to " + GetAlgebraicNotation(aiMove.Destination));
+                    // Display the move visually before making it
+                    EraseHighlights();
+                    HighlightMove(aiMove.Source, aiMove.Destination);
+
+                    // Make the move
+                    MovePiece(aiMove.Source, aiMove.Destination);
+                    
+                    // Clean up and switch turns
+                    EraseHighlights();
+                    selectedPiece = null;
+                    selectedPieceIndex = -1;
+                    possibleMoves = 0;
+                    
+                    Debug.Log("AI moved from " + GetAlgebraicNotation(aiMove.Source) + 
+                            " to " + GetAlgebraicNotation(aiMove.Destination));
+                    previousMove = aiMove;
+                }
+                else
+                {
+                    Debug.LogError("AI's piece not found at " + GetAlgebraicNotation(aiMove.Source));
+                }
             }
-            previousMove = aiMove;
+            else
+            {
+                Debug.LogError("AI couldn't find a valid move!");
+                // Check if in checkmate or stalemate
+                bool inCheck = evaluation.IsInCheck(false, 
+                                                bitboard.returnWhitePiecesByTypes(), 
+                                                bitboard.returnBlackPiecesByTypes(), 
+                                                bitboard.returnAllPieces());
+                if (inCheck)
+                {
+                    Debug.Log("Checkmate - White wins!");
+                }
+                else
+                {
+                    Debug.Log("Stalemate - Draw!");
+                }
+            }
         }
-        else
+        catch (Exception e)
         {
-            Debug.LogError("AI couldn't find a valid move!");
+            Debug.LogError("Error in AI move: " + e.Message);
+        }
+        finally
+        {
+            // Always ensure we go back to white's turn and reset AI thinking flag
+            isWhiteTurn = true;
+            aiIsThinking = false;
         }
     }
+    
+    // Highlight the AI's move for visualization
+    private void HighlightMove(int fromIndex, int toIndex)
+    {
+        GameObject fromTile = GameObject.Find(fromIndex.ToString());
+        GameObject toTile = GameObject.Find(toIndex.ToString());
+        
+        if (fromTile != null && toTile != null)
+        {
+            fromTile.GetComponent<Renderer>().material.color = Color.blue;
+            toTile.GetComponent<Renderer>().material.color = Color.red;
+        }
+    }
+
+    // Rest of your methods remain largely unchanged...
     void InstantiateBoard()
     {
         Instantiate(boardPrefab, boardOrigin, Quaternion.identity);
@@ -198,7 +364,6 @@ public class BoardController : MonoBehaviour
         }
     }
 
-
     //Information about the Tile clicked
     private GameObject SelectedTile;
     private Color TileColor;
@@ -207,6 +372,14 @@ public class BoardController : MonoBehaviour
 
     void HandleClick()
     {
+        // First, determine if the current player is in check
+        bool inCheck = IsInCheck(isWhiteTurn);
+        
+        if (inCheck)
+        {
+            Debug.Log((isWhiteTurn ? "White" : "Black") + " is in check!");
+        }
+        
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
         RaycastHit hit;
 
@@ -296,7 +469,7 @@ public class BoardController : MonoBehaviour
                             selectedPieceType = PieceType.Queen;
                         else if (selectedPiece.name.Contains("King"))
                             selectedPieceType = PieceType.King;
-                            
+                                
                         SelectedTile.GetComponent<Renderer>().material.color = Color.red; // Highlight the selected tile
                         DisplayPossibleMoves();
                     }
@@ -354,7 +527,7 @@ public class BoardController : MonoBehaviour
                                 selectedPieceType = PieceType.Queen;
                             else if (selectedPiece.name.Contains("King"))
                                 selectedPieceType = PieceType.King;
-                                
+                                    
                             SelectedTile.GetComponent<Renderer>().material.color = Color.red;
                             DisplayPossibleMoves();
                         }
@@ -385,7 +558,33 @@ public class BoardController : MonoBehaviour
             }
         }
     }
-
+    private bool DetectCheckmate(bool forWhite)
+    {
+        // Get all possible moves for the current player
+        List<Move> allPossibleMoves = findMoves.GetAllPossibleMoves(forWhite, previousMove);
+        
+        // Check if any of these moves can escape check
+        foreach (Move move in allPossibleMoves)
+        {
+            // Try making this move
+            bitboard.UpdateBitBoard(move);
+            
+            // Is the king still in check after this move?
+            bool stillInCheck = IsInCheck(forWhite);
+            
+            // Undo the move
+            bitboard.UndoBitboard();
+            
+            // If this move escapes check, it's not checkmate
+            if (!stillInCheck)
+            {
+                return false;
+            }
+        }
+        
+        // If we're in check and no move can escape it, it's checkmate
+        return IsInCheck(forWhite);
+    }
     private void StoreTileInformation(RaycastHit hit)
     {
         SelectedTile = hit.collider.gameObject;
@@ -398,28 +597,78 @@ public class BoardController : MonoBehaviour
         EraseHighlights();
         Debug.Log("Tile Index: " + TileIndex + " (" + GetAlgebraicNotation(TileIndex) + ")");
         
+        // Get all possible moves for this piece
         possibleMoves = findMoves.GetPossibleMoves(TileIndex);
         Debug.Log("Possible moves bitboard: " + possibleMoves);
         
-        // Log each potential move in algebraic notation for clarity
-        Debug.Log("Legal moves from " + GetAlgebraicNotation(TileIndex) + ":");
-        bool hasMoves = false;
+        // Check if the king is in check
+        bool inCheck = IsInCheck(isWhiteTurn);
         
-        for (int i = 0; i < 64; i++)
+        if (inCheck)
         {
-            if ((possibleMoves & (1UL << i)) != 0)
+            Debug.Log((isWhiteTurn ? "White" : "Black") + " is in check!");
+            
+            // If king is in check, filter the moves to only those that address the check
+            ulong legalMovesInCheck = 0;
+            
+            // For each potential move, check if it would still leave the king in check
+            for (int i = 0; i < 64; i++)
             {
-                hasMoves = true;
-                GameObject tile = GameObject.Find(i.ToString());
-                tile.GetComponent<Renderer>().material.color = Color.green;
-                Debug.Log("- Can move to " + GetAlgebraicNotation(i));
+                if ((possibleMoves & (1UL << i)) != 0)
+                {
+                    // Try making this move
+                    Move testMove = new Move(TileIndex, i, previousMove, (int)selectedPieceType, selectedPieceIsWhite);
+                    bitboard.UpdateBitBoard(testMove);
+                    
+                    // After the move, is the king still in check?
+                    bool stillInCheck = IsInCheck(isWhiteTurn);
+                    
+                    // Undo the move
+                    bitboard.UndoBitboard();
+                    
+                    // If this move gets out of check, include it in legal moves
+                    if (!stillInCheck)
+                    {
+                        legalMovesInCheck |= (1UL << i);
+                        GameObject tile = GameObject.Find(i.ToString());
+                        tile.GetComponent<Renderer>().material.color = Color.green;
+                        Debug.Log("- Can move to " + GetAlgebraicNotation(i) + " to escape check");
+                    }
+                }
+            }
+            
+            // Replace the possible moves with only the ones that address check
+            possibleMoves = legalMovesInCheck;
+            
+            if (possibleMoves == 0)
+            {
+                Debug.Log("Checkmate! No legal moves to escape check.");
+            }
+        }
+        else
+        {
+            // If not in check, display all legal moves as usual
+            bool hasMoves = false;
+            
+            for (int i = 0; i < 64; i++)
+            {
+                if ((possibleMoves & (1UL << i)) != 0)
+                {
+                    hasMoves = true;
+                    GameObject tile = GameObject.Find(i.ToString());
+                    tile.GetComponent<Renderer>().material.color = Color.green;
+                    Debug.Log("- Can move to " + GetAlgebraicNotation(i));
+                }
+            }
+            
+            if (!hasMoves)
+            {
+                Debug.Log("No legal moves available - potential stalemate");
             }
         }
         
-        if (!hasMoves)
-        {
-            Debug.Log("No legal moves available");
-        }
+        // Always highlight the selected tile
+        SelectedTile.GetComponent<Renderer>().material.color = Color.red;
     }
     
     private void EraseHighlights()
@@ -458,6 +707,14 @@ public class BoardController : MonoBehaviour
         Debug.Log("Moving from bit " + fromIndex + " to bit " + toIndex);
         Debug.Log("That's from position " + GetAlgebraicNotation(fromIndex) + " to " + GetAlgebraicNotation(toIndex));
         
+        // Verify the move is legal
+        if (debugMode && !IsMoveLegal(fromIndex, toIndex))
+        {
+            Debug.LogError("Illegal move attempted!");
+            // You might want to add additional handling here
+            return;
+        }
+        
         // Check if there's a piece at the destination (capture)
         GameObject capturedPiece = FindPieceAtPosition(toIndex);
         if (capturedPiece != null)
@@ -489,6 +746,9 @@ public class BoardController : MonoBehaviour
         }
         
         Debug.Log("Moved " + selectedPiece.name + " from " + fromIndex + " to " + toIndex);
+        
+        // Debug the board state after the move
+        if (debugMode) DebugPrintBoard();
     }
     
     // Convert a bitboard index to algebraic notation (e.g., e4)

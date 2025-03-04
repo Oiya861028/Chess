@@ -237,12 +237,12 @@ Transform:
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
   m_LocalRotation: {x: 0.5, y: 0, z: 0, w: 0.8660254}
-  m_LocalPosition: {x: 4, y: 10, z: -3.5}
+  m_LocalPosition: {x: 3, y: 8, z: -3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 45, y: 45, z: 0}
+  m_LocalEulerAnglesHint: {x: 60, y: 0, z: 0}
 --- !u!114 &330585547
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -486,6 +486,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e5071caca9cca6d4b83faef52658e635, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  debugMode: 1
   PieceParent: {fileID: 153978413}
   boardPrefab: {fileID: 1825465604218844318, guid: a42c9f4a85c6b72469e1fe380c4adb89, type: 3}
   whitePawnPrefab: {fileID: 2898419483997100597, guid: 7ff1acb28d32c37468778c3831f432c2, type: 3}
@@ -500,6 +501,9 @@ MonoBehaviour:
   blackBishopPrefab: {fileID: 9003803962016267591, guid: c1eb4a3869d6aa540bc4370a87753082, type: 3}
   blackQueenPrefab: {fileID: 4221686025490629932, guid: 447a2470ec8c6e740be07c17f3427469, type: 3}
   blackKingPrefab: {fileID: 7883252078267185046, guid: 01873dd0b356ec9488f91304ee4869d0, type: 3}
+  isAIWhite: 0
+  isAIBlack: 1
+  depth: 3
 --- !u!4 &1073159062
 Transform:
   m_ObjectHideFlags: 0

@@ -1,6 +1,7 @@
-using UnityEngine.Scripting.APIUpdating;
-using UnityEngine.UIElements;
 
+using System;
+using UnityEngine;
+using System.Collections.Generic;
 public class Bitboard {
     // Bitboard for white pieces
     public ulong WhitePawn =   0b0000000000000000000000000000000000000000000000001111111100000000;
@@ -16,34 +17,115 @@ public class Bitboard {
     public ulong BlackBishop = 0b0010010000000000000000000000000000000000000000000000000000000000;
     public ulong BlackQueen =  0b0001000000000000000000000000000000000000000000000000000000000000;
     public ulong BlackKing =   0b0000100000000000000000000000000000000000000000000000000000000000;
+    
     Move previousMove;
+    
+    // Move stack to track captured pieces
+    private class MoveState {
+        public ulong[] capturedPieces = new ulong[12]; // Store all captured pieces
+    }
+    
+    private Stack<MoveState> moveStack = new Stack<MoveState>();
+    
+    // Constants for indexing the capturedPieces array
+    private const int WHITE_PAWN = 0;
+    private const int WHITE_KNIGHT = 1;
+    private const int WHITE_BISHOP = 2;
+    private const int WHITE_ROOK = 3;
+    private const int WHITE_QUEEN = 4;
+    private const int WHITE_KING = 5;
+    private const int BLACK_PAWN = 6;
+    private const int BLACK_KNIGHT = 7;
+    private const int BLACK_BISHOP = 8;
+    private const int BLACK_ROOK = 9;
+    private const int BLACK_QUEEN = 10;
+    private const int BLACK_KING = 11;
+    
     public Bitboard() {
         previousMove = null;
     }
+    
     //Utility functions
     public ulong[] returnWhitePiecesByTypes(){
-        ulong[] whitePieces = {WhitePawn, WhiteRook, WhiteKnight, WhiteBishop, WhiteQueen, WhiteKing};
+        // Create an array that matches the index convention used in Evaluation class
+        // The Evaluation class expects: [ALL_PIECES(0), PAWN(1), KNIGHT(2), BISHOP(3), ROOK(4), QUEEN(5), KING(6)]
+        ulong[] whitePieces = new ulong[7];
+        whitePieces[0] = WhitePawn | WhiteRook | WhiteKnight | WhiteBishop | WhiteQueen | WhiteKing; // ALL_PIECES
+        whitePieces[1] = WhitePawn;   // PAWN
+        whitePieces[2] = WhiteKnight; // KNIGHT
+        whitePieces[3] = WhiteBishop; // BISHOP
+        whitePieces[4] = WhiteRook;   // ROOK
+        whitePieces[5] = WhiteQueen;  // QUEEN
+        whitePieces[6] = WhiteKing;   // KING
         return whitePieces;
     }
+
     public ulong[] returnBlackPiecesByTypes(){
-        ulong[] blackPieces = {BlackPawn, BlackRook, BlackKnight, BlackBishop, BlackQueen, BlackKing};
+        // Create an array that matches the index convention used in Evaluation class
+        // The Evaluation class expects: [ALL_PIECES(0), PAWN(1), KNIGHT(2), BISHOP(3), ROOK(4), QUEEN(5), KING(6)]
+        ulong[] blackPieces = new ulong[7];
+        blackPieces[0] = BlackPawn | BlackRook | BlackKnight | BlackBishop | BlackQueen | BlackKing; // ALL_PIECES
+        blackPieces[1] = BlackPawn;   // PAWN
+        blackPieces[2] = BlackKnight; // KNIGHT
+        blackPieces[3] = BlackBishop; // BISHOP
+        blackPieces[4] = BlackRook;   // ROOK
+        blackPieces[5] = BlackQueen;  // QUEEN
+        blackPieces[6] = BlackKing;   // KING
         return blackPieces;
     }
+    
     public ulong returnAllWhitePieces(){
         return WhitePawn | WhiteRook | WhiteKnight | WhiteBishop | WhiteQueen | WhiteKing;
     }
+    
     public ulong returnAllBlackPieces(){
         return BlackPawn | BlackRook | BlackKnight | BlackBishop | BlackQueen | BlackKing;
     }   
+    
     public ulong returnAllPieces(){
         return WhitePawn | WhiteRook | WhiteKnight | WhiteBishop | WhiteQueen | WhiteKing | BlackPawn | BlackRook | BlackKnight | BlackBishop | BlackQueen | BlackKing;
     }
     
     public void UpdateBitBoard(Move move) {
-        // Update the board following the move 
-        // Assuming move contains source and destination positions and piece type
+        // Create a new state to track what might be captured in this move
+        MoveState state = new MoveState();
+        
         ulong sourceMask = 1UL << move.Source;
         ulong destinationMask = 1UL << move.Destination;
+
+        // Record any pieces that might be captured at the destination
+        // White pieces that might be captured by black
+        if (!move.IsWhite) {
+            state.capturedPieces[WHITE_PAWN] = WhitePawn & destinationMask;
+            state.capturedPieces[WHITE_KNIGHT] = WhiteKnight & destinationMask;
+            state.capturedPieces[WHITE_BISHOP] = WhiteBishop & destinationMask;
+            state.capturedPieces[WHITE_ROOK] = WhiteRook & destinationMask;
+            state.capturedPieces[WHITE_QUEEN] = WhiteQueen & destinationMask;
+            // Don't include king - should never be captured
+            
+            // Clear any white pieces at the destination
+            WhitePawn &= ~destinationMask;
+            WhiteRook &= ~destinationMask;
+            WhiteKnight &= ~destinationMask;
+            WhiteBishop &= ~destinationMask;
+            WhiteQueen &= ~destinationMask;
+        } 
+        // Black pieces that might be captured by white
+        else {
+            state.capturedPieces[BLACK_PAWN] = BlackPawn & destinationMask;
+            state.capturedPieces[BLACK_KNIGHT] = BlackKnight & destinationMask;
+            state.capturedPieces[BLACK_BISHOP] = BlackBishop & destinationMask;
+            state.capturedPieces[BLACK_ROOK] = BlackRook & destinationMask;
+            state.capturedPieces[BLACK_QUEEN] = BlackQueen & destinationMask;
+            // Don't include king - should never be captured
+            
+            // Clear any black pieces at the destination
+            BlackPawn &= ~destinationMask;
+            BlackRook &= ~destinationMask;
+            BlackKnight &= ~destinationMask;
+            BlackBishop &= ~destinationMask;
+            BlackQueen &= ~destinationMask;
+        }
 
         // Remove the piece from the source position
         switch (move.PieceType) {
@@ -55,7 +137,7 @@ public class Bitboard {
                 if (move.IsWhite) WhiteRook &= ~sourceMask;
                 else BlackRook &= ~sourceMask;
                 break;
-            case (int)PieceType.Knight:
+            case (int) PieceType.Knight:
                 if (move.IsWhite) WhiteKnight &= ~sourceMask;
                 else BlackKnight &= ~sourceMask;
                 break;
@@ -101,6 +183,8 @@ public class Bitboard {
                 break;
         }
 
+        // Push the state onto our stack
+        moveStack.Push(state);
         previousMove = move;
     }
 
@@ -166,6 +250,25 @@ public class Bitboard {
                 else BlackKing |= sourceMask;
                 break;
         }
+
+        // Get captured pieces from the stack and restore them
+        if (moveStack.Count > 0) {
+            MoveState state = moveStack.Pop();
+            
+            // Restore any captured pieces
+            WhitePawn |= state.capturedPieces[WHITE_PAWN];
+            WhiteKnight |= state.capturedPieces[WHITE_KNIGHT];
+            WhiteBishop |= state.capturedPieces[WHITE_BISHOP];
+            WhiteRook |= state.capturedPieces[WHITE_ROOK];
+            WhiteQueen |= state.capturedPieces[WHITE_QUEEN];
+            
+            BlackPawn |= state.capturedPieces[BLACK_PAWN];
+            BlackKnight |= state.capturedPieces[BLACK_KNIGHT];
+            BlackBishop |= state.capturedPieces[BLACK_BISHOP];
+            BlackRook |= state.capturedPieces[BLACK_ROOK];
+            BlackQueen |= state.capturedPieces[BLACK_QUEEN];
+        }
+        
         previousMove = previousMove.previousMove; //set the previous move to the move before the last move
     }
 }
