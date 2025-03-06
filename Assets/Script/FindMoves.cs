@@ -6,7 +6,12 @@ public class FindMoves
 {
     private Bitboard bitboard;
     private Evaluation evaluation;
-    
+    private const int WHITE_KING_START = 4;
+    private const int BLACK_KING_START = 60;
+    private const int WHITE_KINGSIDE_ROOK_START = 7;
+    private const int WHITE_QUEENSIDE_ROOK_START = 0;
+    private const int BLACK_KINGSIDE_ROOK_START = 63;
+    private const int BLACK_QUEENSIDE_ROOK_START = 56;
     // Debug mode to log move generation details
     private bool debugMode = false;
 
@@ -84,6 +89,118 @@ public class FindMoves
         List<Move> legalMoves = FilterLegalMoves(moves, isWhite);
         
         if (debugMode) Debug.Log($"Found {legalMoves.Count} legal moves");
+        
+        int kingStartPosition = isWhite ? WHITE_KING_START : BLACK_KING_START;
+        bool kingMoved = isWhite ? bitboard.whiteKingMoved : bitboard.blackKingMoved;
+        
+        if (!kingMoved) {
+            ulong kingBitboard = isWhite ? bitboard.WhiteKing : bitboard.BlackKing;
+            
+            // Verify king is at starting position
+            if ((kingBitboard & (1UL << kingStartPosition)) != 0) {
+                // Check kingside castling
+                bool kingsideRookMoved = isWhite ? bitboard.whiteKingsideRookMoved : bitboard.blackKingsideRookMoved;
+                if (!kingsideRookMoved) {
+                    ulong kingsidePath = isWhite ? 
+                                        ((1UL << 5) | (1UL << 6)) : 
+                                        ((1UL << 61) | (1UL << 62));
+                    
+                    if ((bitboard.returnAllPieces() & kingsidePath) == 0) {
+                        // Check if king is in check
+                        if (!evaluation.IsInCheck(isWhite, 
+                                                bitboard.returnWhitePiecesByTypes(), 
+                                                bitboard.returnBlackPiecesByTypes(), 
+                                                bitboard.returnAllPieces())) {
+                                                
+                            // Check if king passes through check
+                            int passThroughSquare = isWhite ? 5 : 61; // f1 or f8
+                            
+                            // Try moving king to pass through square
+                            Move passThroughMove = new Move(kingStartPosition, passThroughSquare, previousMove, (int)PieceType.King, isWhite);
+                            bitboard.UpdateBitBoard(passThroughMove);
+                            
+                            bool passThroughCheck = evaluation.IsInCheck(isWhite, 
+                                                                        bitboard.returnWhitePiecesByTypes(), 
+                                                                        bitboard.returnBlackPiecesByTypes(), 
+                                                                        bitboard.returnAllPieces());
+                                                                        
+                            bitboard.UndoBitboard();
+                            
+                            if (!passThroughCheck) {
+                                // Check destination square
+                                int destSquare = isWhite ? 6 : 62; // g1 or g8
+                                
+                                Move destMove = new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite);
+                                bitboard.UpdateBitBoard(destMove);
+                                
+                                bool destCheck = evaluation.IsInCheck(isWhite, 
+                                                                    bitboard.returnWhitePiecesByTypes(), 
+                                                                    bitboard.returnBlackPiecesByTypes(), 
+                                                                    bitboard.returnAllPieces());
+                                                                    
+                                bitboard.UndoBitboard();
+                                
+                                if (!destCheck) {
+                                    // Add kingside castling move
+                                    legalMoves.Add(new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite));
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Check queenside castling
+                bool queensideRookMoved = isWhite ? bitboard.whiteQueensideRookMoved : bitboard.blackQueensideRookMoved;
+                if (!queensideRookMoved) {
+                    ulong queensidePath = isWhite ? 
+                                        ((1UL << 1) | (1UL << 2) | (1UL << 3)) : 
+                                        ((1UL << 57) | (1UL << 58) | (1UL << 59));
+                    
+                    if ((bitboard.returnAllPieces() & queensidePath) == 0) {
+                        // Check if king is in check
+                        if (!evaluation.IsInCheck(isWhite, 
+                                                bitboard.returnWhitePiecesByTypes(), 
+                                                bitboard.returnBlackPiecesByTypes(), 
+                                                bitboard.returnAllPieces())) {
+                                                
+                            // Check if king passes through check
+                            int passThroughSquare = isWhite ? 3 : 59; // d1 or d8
+                            
+                            // Try moving king to pass through square
+                            Move passThroughMove = new Move(kingStartPosition, passThroughSquare, previousMove, (int)PieceType.King, isWhite);
+                            bitboard.UpdateBitBoard(passThroughMove);
+                            
+                            bool passThroughCheck = evaluation.IsInCheck(isWhite, 
+                                                                        bitboard.returnWhitePiecesByTypes(), 
+                                                                        bitboard.returnBlackPiecesByTypes(), 
+                                                                        bitboard.returnAllPieces());
+                                                                        
+                            bitboard.UndoBitboard();
+                            
+                            if (!passThroughCheck) {
+                                // Check destination square
+                                int destSquare = isWhite ? 2 : 58; // c1 or c8
+                                
+                                Move destMove = new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite);
+                                bitboard.UpdateBitBoard(destMove);
+                                
+                                bool destCheck = evaluation.IsInCheck(isWhite, 
+                                                                    bitboard.returnWhitePiecesByTypes(), 
+                                                                    bitboard.returnBlackPiecesByTypes(), 
+                                                                    bitboard.returnAllPieces());
+                                                                    
+                                bitboard.UndoBitboard();
+                                
+                                if (!destCheck) {
+                                    // Add queenside castling move
+                                    legalMoves.Add(new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         
         return legalMoves;
     }
@@ -209,6 +326,77 @@ public class FindMoves
     /// <summary>
     /// Returns all possible moves for a piece at the given position
     /// </summary>
+    public bool IsPiecePinned(int pieceIndex, bool isWhite)
+    {
+        // Find the king
+        ulong kingBitboard = isWhite ? bitboard.WhiteKing : bitboard.BlackKing;
+        if (kingBitboard == 0) return false;
+        
+        int kingIndex = BitboardUtils.GetLSB(kingBitboard);
+        
+        // Get coordinates
+        int pieceRank = pieceIndex / 8;
+        int pieceFile = pieceIndex % 8;
+        int kingRank = kingIndex / 8;
+        int kingFile = kingIndex % 8;
+        
+        // Check if on same rank, file, or diagonal
+        bool onSameRank = kingRank == pieceRank;
+        bool onSameFile = kingFile == pieceFile;
+        bool onSameDiagonal = Math.Abs(kingRank - pieceRank) == Math.Abs(kingFile - pieceFile);
+        
+        // If not aligned, can't be pinned
+        if (!onSameRank && !onSameFile && !onSameDiagonal) return false;
+        
+        // Determine search direction from king to piece
+        int rankDir = 0;
+        int fileDir = 0;
+        
+        if (onSameRank) fileDir = pieceFile > kingFile ? 1 : -1;
+        else if (onSameFile) rankDir = pieceRank > kingRank ? 1 : -1;
+        else { // on diagonal
+            rankDir = pieceRank > kingRank ? 1 : -1;
+            fileDir = pieceFile > kingFile ? 1 : -1;
+        }
+        
+        // Get enemy sliding pieces
+        ulong enemyRooks = isWhite ? bitboard.BlackRook : bitboard.WhiteRook;
+        ulong enemyBishops = isWhite ? bitboard.BlackBishop : bitboard.WhiteBishop;
+        ulong enemyQueens = isWhite ? bitboard.BlackQueen : bitboard.WhiteQueen;
+        
+        // Check for pinning piece beyond the piece being checked
+        int r = pieceRank + rankDir;
+        int f = pieceFile + fileDir;
+        
+        while (r >= 0 && r < 8 && f >= 0 && f < 8)
+        {
+            int squareIndex = r * 8 + f;
+            ulong squareMask = 1UL << squareIndex;
+            
+            // If we hit a piece
+            if ((bitboard.returnAllPieces() & squareMask) != 0)
+            {
+                // Is it an enemy sliding piece that could pin?
+                bool isPinner = false;
+                
+                if (onSameRank || onSameFile)
+                {
+                    isPinner = (enemyRooks & squareMask) != 0 || (enemyQueens & squareMask) != 0;
+                }
+                else // on diagonal
+                {
+                    isPinner = (enemyBishops & squareMask) != 0 || (enemyQueens & squareMask) != 0;
+                }
+                
+                return isPinner;
+            }
+            
+            r += rankDir;
+            f += fileDir;
+        }
+        
+        return false;
+    }
     public ulong GetPossibleMoves(int position)
     {
         // Determine what piece is at this position
@@ -246,44 +434,149 @@ public class FindMoves
     /// Calculate possible moves for a piece based on its type and color
     /// </summary>
     private ulong GetPossibleMovesForPiece(int position, PieceType pieceType, bool isWhite)
-    {
+    {  
         // Get combined piece bitboards
         ulong allPieces = bitboard.WhitePawn | bitboard.WhiteKnight | bitboard.WhiteBishop | 
-                          bitboard.WhiteRook | bitboard.WhiteQueen | bitboard.WhiteKing |
-                          bitboard.BlackPawn | bitboard.BlackKnight | bitboard.BlackBishop |
-                          bitboard.BlackRook | bitboard.BlackQueen | bitboard.BlackKing;
-                          
+                        bitboard.WhiteRook | bitboard.WhiteQueen | bitboard.WhiteKing |
+                        bitboard.BlackPawn | bitboard.BlackKnight | bitboard.BlackBishop |
+                        bitboard.BlackRook | bitboard.BlackQueen | bitboard.BlackKing;
+                        
         ulong ownPieces = isWhite ? 
             (bitboard.WhitePawn | bitboard.WhiteKnight | bitboard.WhiteBishop | 
-             bitboard.WhiteRook | bitboard.WhiteQueen | bitboard.WhiteKing) :
+            bitboard.WhiteRook | bitboard.WhiteQueen | bitboard.WhiteKing) :
             (bitboard.BlackPawn | bitboard.BlackKnight | bitboard.BlackBishop |
-             bitboard.BlackRook | bitboard.BlackQueen | bitboard.BlackKing);
-             
+            bitboard.BlackRook | bitboard.BlackQueen | bitboard.BlackKing);
+            
         ulong enemyPieces = isWhite ?
             (bitboard.BlackPawn | bitboard.BlackKnight | bitboard.BlackBishop |
-             bitboard.BlackRook | bitboard.BlackQueen | bitboard.BlackKing) :
+            bitboard.BlackRook | bitboard.BlackQueen | bitboard.BlackKing) :
             (bitboard.WhitePawn | bitboard.WhiteKnight | bitboard.WhiteBishop |
-             bitboard.WhiteRook | bitboard.WhiteQueen | bitboard.WhiteKing);
+            bitboard.WhiteRook | bitboard.WhiteQueen | bitboard.WhiteKing);
+        
+        // Get basic moves based on piece type
+        ulong moves = 0;
         
         // Delegate to the appropriate move generator
         switch (pieceType)
         {
             case PieceType.Pawn:
-                return CalculatePawnMoves(position, isWhite, allPieces, ownPieces, enemyPieces);
+                moves = CalculatePawnMoves(position, isWhite, allPieces, ownPieces, enemyPieces);
+                break;
             case PieceType.Knight:
-                return CalculateKnightMoves(position, ownPieces);
+                moves = CalculateKnightMoves(position, ownPieces);
+                break;
             case PieceType.Bishop:
-                return CalculateBishopMoves(position, allPieces, ownPieces);
+                moves = CalculateBishopMoves(position, allPieces, ownPieces);
+                break;
             case PieceType.Rook:
-                return CalculateRookMoves(position, allPieces, ownPieces);
+                moves = CalculateRookMoves(position, allPieces, ownPieces);
+                break;
             case PieceType.Queen:
-                return CalculateQueenMoves(position, allPieces, ownPieces);
+                moves = CalculateQueenMoves(position, allPieces, ownPieces);
+                break;
             case PieceType.King:
-                return CalculateKingMoves(position, ownPieces);
+                moves = CalculateKingMoves(position, ownPieces);
+                break;
             default:
                 Debug.LogError($"Unknown piece type: {pieceType}");
                 return 0;
         }
+        
+        // Add castling moves for kings
+        if (pieceType == PieceType.King) {
+            // Check if this is a king in its starting position
+            if (isWhite && position == WHITE_KING_START && !bitboard.whiteKingMoved) {
+                // White kingside castling
+                if (!bitboard.whiteKingsideRookMoved) {
+                    ulong pathMask = (1UL << 5) | (1UL << 6); // f1, g1
+                    if ((allPieces & pathMask) == 0) {
+                        // Add kingside castling move if path is clear
+                        moves |= 1UL << 6; // g1
+                    }
+                }
+                
+                // White queenside castling
+                if (!bitboard.whiteQueensideRookMoved) {
+                    ulong pathMask = (1UL << 1) | (1UL << 2) | (1UL << 3); // b1, c1, d1
+                    if ((allPieces & pathMask) == 0) {
+                        // Add queenside castling move if path is clear
+                        moves |= 1UL << 2; // c1
+                    }
+                }
+            }
+            else if (!isWhite && position == BLACK_KING_START && !bitboard.blackKingMoved) {
+                // Black kingside castling
+                if (!bitboard.blackKingsideRookMoved) {
+                    ulong pathMask = (1UL << 61) | (1UL << 62); // f8, g8
+                    if ((allPieces & pathMask) == 0) {
+                        // Add kingside castling move if path is clear
+                        moves |= 1UL << 62; // g8
+                    }
+                }
+                
+                // Black queenside castling
+                if (!bitboard.blackQueensideRookMoved) {
+                    ulong pathMask = (1UL << 57) | (1UL << 58) | (1UL << 59); // b8, c8, d8
+                    if ((allPieces & pathMask) == 0) {
+                        // Add queenside castling move if path is clear
+                        moves |= 1UL << 58; // c8
+                    }
+                }
+            }
+        }
+        
+        // If pinned, filter moves to only those along the pin line
+        if (pieceType != PieceType.King && IsPiecePinned(position, isWhite)) {
+            // Find king position
+            ulong kingBitboard = isWhite ? bitboard.WhiteKing : bitboard.BlackKing;
+            int kingIndex = BitOperations.TrailingZeroCount(kingBitboard);
+            
+            int pieceRank = position / 8;
+            int pieceFile = position % 8;
+            int kingRank = kingIndex / 8;
+            int kingFile = kingIndex % 8;
+            
+            ulong pinLine = 0;
+            
+            // Same rank
+            if (pieceRank == kingRank) {
+                for (int f = 0; f < 8; f++) {
+                    pinLine |= 1UL << (pieceRank * 8 + f);
+                }
+            }
+            // Same file
+            else if (pieceFile == kingFile) {
+                for (int r = 0; r < 8; r++) {
+                    pinLine |= 1UL << (r * 8 + pieceFile);
+                }
+            }
+            // Same diagonal
+            else if (Math.Abs(pieceRank - kingRank) == Math.Abs(pieceFile - kingFile)) {
+                // Determine diagonal direction
+                int rankDir = kingRank < pieceRank ? 1 : -1;
+                int fileDir = kingFile < pieceFile ? 1 : -1;
+                
+                // Add all squares on this diagonal
+                for (int r = 0, f = 0; r < 8 && f < 8; r++, f++) {
+                    int newRank = kingRank + r * rankDir;
+                    int newFile = kingFile + f * fileDir;
+                    
+                    if (newRank >= 0 && newRank < 8 && newFile >= 0 && newFile < 8) {
+                        pinLine |= 1UL << (newRank * 8 + newFile);
+                    }
+                }
+            }
+            
+            // For knights, can't move at all when pinned
+            if (pieceType == PieceType.Knight) {
+                return 0;
+            }
+            
+            // For other pieces, can only move along the pin line
+            moves &= pinLine;
+        }
+        
+        return moves;
     }
 
     /// <summary>

@@ -8,7 +8,12 @@ public class BoardController : MonoBehaviour
     public bool debugMode = true;
     //half pli, which I call a move, that precedes the current board state
     Move previousMove;
-
+    private const int WHITE_KING_START = 4;
+    private const int BLACK_KING_START = 60;
+    private const int WHITE_KINGSIDE_ROOK_START = 7;
+    private const int WHITE_QUEENSIDE_ROOK_START = 0;
+    private const int BLACK_KINGSIDE_ROOK_START = 63;
+    private const int BLACK_QUEENSIDE_ROOK_START = 56;
     //Board Dimensions
     private int squareSize = 1;
     private Vector3 boardOrigin = new Vector3(0f, 0f, 0f);
@@ -45,7 +50,7 @@ public class BoardController : MonoBehaviour
     private int selectedPieceIndex = -1;
     private PieceType selectedPieceType;
     private bool selectedPieceIsWhite;
-
+    
     //AI
     private StockFridge AI;
     public bool isAIWhite = false;
@@ -107,15 +112,6 @@ public class BoardController : MonoBehaviour
     Debug.Log("  a b c d e f g h");
     Debug.Log("--------------------------------------");
     }
-    private bool IsInCheck(bool isWhite)
-    {
-        return evaluation.IsInCheck(isWhite, 
-                                bitboard.returnWhitePiecesByTypes(), 
-                                bitboard.returnBlackPiecesByTypes(), 
-                                bitboard.returnAllPieces());
-    }
-
-
     private bool IsMoveLegal(int fromIndex, int toIndex)
     {
         if (!debugMode) return true;
@@ -140,7 +136,7 @@ public class BoardController : MonoBehaviour
         
         if (!isWhitePiece && !isBlackPiece)
         {
-            Debug.LogError($"No piece at source square {GetAlgebraicNotation(fromIndex)}");
+            Debug.LogError($"No piece at source square {BitboardUtils.IndexToAlgebraic(fromIndex)}");
             return false;
         }
         
@@ -150,7 +146,7 @@ public class BoardController : MonoBehaviour
         
         if (!isValidMove)
         {
-            Debug.LogError($"Invalid move from {GetAlgebraicNotation(fromIndex)} to {GetAlgebraicNotation(toIndex)}");
+            Debug.LogError($"Invalid move from {BitboardUtils.IndexToAlgebraic(fromIndex)} to {BitboardUtils.IndexToAlgebraic(toIndex)}");
             return false;
         }
         
@@ -188,7 +184,7 @@ public class BoardController : MonoBehaviour
         
         if (kingInCheck)
         {
-            Debug.LogError($"Move would leave king in check: {GetAlgebraicNotation(fromIndex)} to {GetAlgebraicNotation(toIndex)}");
+            Debug.LogError($"Move would leave king in check: {BitboardUtils.IndexToAlgebraic(fromIndex)} to {BitboardUtils.IndexToAlgebraic(toIndex)}");
             return false;
         }
         
@@ -221,24 +217,205 @@ public class BoardController : MonoBehaviour
             MakeAIMove();
         }
     }
-
+    private bool IsPiecePinned(int pieceIndex, bool isWhite)
+    {
+        // Find the king
+        int kingIndex = -1;
+        ulong kingBitboard = isWhite ? bitboard.WhiteKing : bitboard.BlackKing;
+        
+        // Get the king position
+        for (int i = 0; i < 64; i++)
+        {
+            if ((kingBitboard & (1UL << i)) != 0)
+            {
+                kingIndex = i;
+                break;
+            }
+        }
+        
+        if (kingIndex == -1)
+        {
+            Debug.LogError("Could not find king for pin check");
+            return false;
+        }
+        
+        // Test if the piece is on the same rank, file, or diagonal as the king
+        int pieceRank = pieceIndex / 8;
+        int pieceFile = pieceIndex % 8;
+        int kingRank = kingIndex / 8;
+        int kingFile = kingIndex % 8;
+        
+        bool onSameRank = pieceRank == kingRank;
+        bool onSameFile = pieceFile == kingFile;
+        bool onSameDiagonal = Math.Abs(pieceRank - kingRank) == Math.Abs(pieceFile - kingFile);
+        
+        if (!onSameRank && !onSameFile && !onSameDiagonal)
+        {
+            return false; // Can't be pinned if not on the same line as the king
+        }
+        
+        // Get potentially pinning pieces (enemy rooks, bishops, queens)
+        ulong enemyPinners;
+        if (isWhite)
+        {
+            // Enemy rooks and queens for rank/file pins
+            // Enemy bishops and queens for diagonal pins
+            if (onSameRank || onSameFile)
+            {
+                enemyPinners = bitboard.BlackRook | bitboard.BlackQueen;
+            }
+            else // onSameDiagonal
+            {
+                enemyPinners = bitboard.BlackBishop | bitboard.BlackQueen;
+            }
+        }
+        else
+        {
+            if (onSameRank || onSameFile)
+            {
+                enemyPinners = bitboard.WhiteRook | bitboard.WhiteQueen;
+            }
+            else // onSameDiagonal
+            {
+                enemyPinners = bitboard.WhiteBishop | bitboard.WhiteQueen;
+            }
+        }
+        
+        // If no potential pinners, piece is not pinned
+        if (enemyPinners == 0)
+        {
+            return false;
+        }
+        
+        // Check each potential pinner
+        for (int i = 0; i < 64; i++)
+        {
+            if ((enemyPinners & (1UL << i)) == 0)
+            {
+                continue; // Not a pinner
+            }
+            
+            int pinnerRank = i / 8;
+            int pinnerFile = i % 8;
+            
+            // Ensure the potential pinner is on the same line
+            bool pinnerOnSameRank = pinnerRank == kingRank && pinnerRank == pieceRank;
+            bool pinnerOnSameFile = pinnerFile == kingFile && pinnerFile == pieceFile;
+            bool pinnerOnSameDiagonal = (Math.Abs(pinnerRank - kingRank) == Math.Abs(pinnerFile - kingFile)) &&
+                                    (Math.Abs(pinnerRank - pieceRank) == Math.Abs(pinnerFile - pieceFile));
+                                    
+            if (!pinnerOnSameRank && !pinnerOnSameFile && !pinnerOnSameDiagonal)
+            {
+                continue; // Not aligned properly
+            }
+            
+            // Check for other pieces between king, the piece, and the potential pinner
+            ulong allPieces = bitboard.returnAllPieces();
+            
+            // Create a path mask for the line between king, piece, and pinner
+            ulong pathMask = 0;
+            
+            if (pinnerOnSameRank)
+            {
+                // For same rank, we need min and max files
+                int minFile = Math.Min(Math.Min(kingFile, pieceFile), pinnerFile);
+                int maxFile = Math.Max(Math.Max(kingFile, pieceFile), pinnerFile);
+                
+                for (int f = minFile; f <= maxFile; f++)
+                {
+                    pathMask |= 1UL << (kingRank * 8 + f);
+                }
+            }
+            else if (pinnerOnSameFile)
+            {
+                // For same file, we need min and max ranks
+                int minRank = Math.Min(Math.Min(kingRank, pieceRank), pinnerRank);
+                int maxRank = Math.Max(Math.Max(kingRank, pieceRank), pinnerRank);
+                
+                for (int r = minRank; r <= maxRank; r++)
+                {
+                    pathMask |= 1UL << (r * 8 + kingFile);
+                }
+            }
+            else if (pinnerOnSameDiagonal)
+            {
+                // For diagonals, we need to determine the direction
+                int rankDir = pinnerRank > kingRank ? 1 : -1;
+                int fileDir = pinnerFile > kingFile ? 1 : -1;
+                
+                int r = kingRank;
+                int f = kingFile;
+                
+                while (r >= 0 && r < 8 && f >= 0 && f < 8)
+                {
+                    pathMask |= 1UL << (r * 8 + f);
+                    
+                    if (r == pinnerRank && f == pinnerFile)
+                        break;
+                        
+                    r += rankDir;
+                    f += fileDir;
+                }
+            }
+            
+            // Remove the king, piece, and pinner from the path mask
+            pathMask &= ~(1UL << kingIndex);
+            pathMask &= ~(1UL << pieceIndex);
+            pathMask &= ~(1UL << i);
+            
+            // If there are no other pieces on the path, the piece is pinned
+            if ((pathMask & allPieces) == 0)
+            {
+                return true;
+            }
+        }
+        
+        return false;
+    }
     private void MakeAIMove()
     {
         try
         {
+            aiIsThinking = true;
+            
+            // Debug current board state before AI move
+            Debug.Log("Board state before AI move:");
+            DebugPrintBoard();
+            
+            // Verify board consistency before AI move
+            VerifyBoardState();
+            
             // Get the best move from StockFridge
+            // IMPORTANT: Make sure we're passing false here since AI is playing as black
             Move aiMove = AI.GetBestMove(depth, false, previousMove);
             
             if (aiMove != null)
             {
+                // Double check the AI is playing as black
+                if (aiMove.IsWhite)
+                {
+                    Debug.LogError("AI returned a white piece move but should be playing as black");
+                    isWhiteTurn = true;
+                    aiIsThinking = false;
+                    return;
+                }
+                
                 // Find the piece at the source position
                 selectedPiece = FindPieceAtPosition(aiMove.Source);
                 if (selectedPiece != null)
                 {
-                    // Verify the piece is actually black (add this check)
+                    // Verify the piece is actually black
                     if (!selectedPiece.name.StartsWith("Black"))
                     {
                         Debug.LogError("AI tried to move a white piece: " + selectedPiece.name);
+                        Debug.LogError("Move source: " + BitboardUtils.IndexToAlgebraic(aiMove.Source) + 
+                                    ", destination: " + BitboardUtils.IndexToAlgebraic(aiMove.Destination) +
+                                    ", piece type: " + aiMove.PieceType + 
+                                    ", is white move: " + aiMove.IsWhite);
+                        
+                        // Fix the inconsistency - update the bitboard
+                        VerifyBoardState();
+                        
                         isWhiteTurn = true;
                         aiIsThinking = false;
                         return;
@@ -260,15 +437,29 @@ public class BoardController : MonoBehaviour
                     selectedPiece = null;
                     selectedPieceIndex = -1;
                     possibleMoves = 0;
+                    isWhiteTurn = true;
                     
-                    Debug.Log("AI moved from " + GetAlgebraicNotation(aiMove.Source) + 
-                            " to " + GetAlgebraicNotation(aiMove.Destination));
-                    previousMove = aiMove;
+                    Debug.Log("AI moved from " + BitboardUtils.IndexToAlgebraic(aiMove.Source) + 
+                            " to " + BitboardUtils.IndexToAlgebraic(aiMove.Destination));
+                            
+                    // Debug board state after AI move
+                    Debug.Log("Board state after AI move:");
+                    DebugPrintBoard();
+                    
+                    // Verify board consistency after AI move
+                    VerifyBoardState();
                 }
                 else
                 {
-                    Debug.LogError("AI's piece not found at " + GetAlgebraicNotation(aiMove.Source));
+                    Debug.LogError("AI's piece not found at " + BitboardUtils.IndexToAlgebraic(aiMove.Source));
+                    
+                    // Try to fix the inconsistency
+                    VerifyBoardState();
+                    
+                    isWhiteTurn = true;
+                    aiIsThinking = false;
                 }
+                previousMove = aiMove;
             }
             else
             {
@@ -286,16 +477,18 @@ public class BoardController : MonoBehaviour
                 {
                     Debug.Log("Stalemate - Draw!");
                 }
+                isWhiteTurn = true;
+                aiIsThinking = false;
             }
         }
         catch (Exception e)
         {
-            Debug.LogError("Error in AI move: " + e.Message);
+            Debug.LogError("Error in AI move: " + e.Message + "\n" + e.StackTrace);
+            isWhiteTurn = true;
+            aiIsThinking = false;
         }
         finally
         {
-            // Always ensure we go back to white's turn and reset AI thinking flag
-            isWhiteTurn = true;
             aiIsThinking = false;
         }
     }
@@ -411,7 +604,7 @@ public class BoardController : MonoBehaviour
             // Check if the clicked position is a valid move destination
             if (clickedTileIndex != -1 && (possibleMoves & (1UL << clickedTileIndex)) != 0)
             {
-                Debug.Log("Valid move destination: " + GetAlgebraicNotation(clickedTileIndex));
+                Debug.Log("Valid move destination: " + BitboardUtils.IndexToAlgebraic(clickedTileIndex));
                 
                 // This tile is a valid move destination
                 MovePiece(selectedPieceIndex, clickedTileIndex);
@@ -591,79 +784,102 @@ public class BoardController : MonoBehaviour
         TileColor = SelectedTile.GetComponent<Renderer>().material.color;
         TileIndex = int.Parse(hit.collider.gameObject.name);
     }
-    
+    private bool IsInCheck(bool isWhite)
+    {
+        return evaluation.IsInCheck(isWhite, 
+                                bitboard.returnWhitePiecesByTypes(), 
+                                bitboard.returnBlackPiecesByTypes(), 
+                                bitboard.returnAllPieces());
+    }
     private void DisplayPossibleMoves()
     {
         EraseHighlights();
-        Debug.Log("Tile Index: " + TileIndex + " (" + GetAlgebraicNotation(TileIndex) + ")");
+        Debug.Log("Tile Index: " + TileIndex + " (" + BitboardUtils.IndexToAlgebraic(TileIndex) + ")");
         
         // Get all possible moves for this piece
         possibleMoves = findMoves.GetPossibleMoves(TileIndex);
-        Debug.Log("Possible moves bitboard: " + possibleMoves);
         
-        // Check if the king is in check
-        bool inCheck = IsInCheck(isWhiteTurn);
-        
-        if (inCheck)
-        {
-            Debug.Log((isWhiteTurn ? "White" : "Black") + " is in check!");
+        // Force add castling moves for King
+        if (selectedPieceType == PieceType.King) {
+            Debug.Log("Checking castling moves for " + (selectedPieceIsWhite ? "white" : "black") + " king");
             
-            // If king is in check, filter the moves to only those that address the check
-            ulong legalMovesInCheck = 0;
+            // Debug castling state
+            if (selectedPieceIsWhite) {
+                Debug.Log($"White castling state - King moved: {bitboard.whiteKingMoved}, " +
+                        $"Kingside rook moved: {bitboard.whiteKingsideRookMoved}, " + 
+                        $"Queenside rook moved: {bitboard.whiteQueensideRookMoved}");
+            } else {
+                Debug.Log($"Black castling state - King moved: {bitboard.blackKingMoved}, " +
+                        $"Kingside rook moved: {bitboard.blackKingsideRookMoved}, " + 
+                        $"Queenside rook moved: {bitboard.blackQueensideRookMoved}");
+            }
             
-            // For each potential move, check if it would still leave the king in check
-            for (int i = 0; i < 64; i++)
-            {
-                if ((possibleMoves & (1UL << i)) != 0)
-                {
-                    // Try making this move
-                    Move testMove = new Move(TileIndex, i, previousMove, (int)selectedPieceType, selectedPieceIsWhite);
-                    bitboard.UpdateBitBoard(testMove);
+            // Add castling moves explicitly for white king
+            if (selectedPieceIsWhite && TileIndex == 4) { // White king at e1
+                if (!bitboard.whiteKingMoved) {
+                    // Check kingside castling
+                    if (!bitboard.whiteKingsideRookMoved) {
+                        ulong pathMask = (1UL << 5) | (1UL << 6); // f1, g1
+                        if ((bitboard.returnAllPieces() & pathMask) == 0) {
+                            // Add the castling move regardless of check status for now
+                            possibleMoves |= 1UL << 6; // g1
+                            Debug.Log("Added white kingside castling move");
+                        }
+                    }
                     
-                    // After the move, is the king still in check?
-                    bool stillInCheck = IsInCheck(isWhiteTurn);
-                    
-                    // Undo the move
-                    bitboard.UndoBitboard();
-                    
-                    // If this move gets out of check, include it in legal moves
-                    if (!stillInCheck)
-                    {
-                        legalMovesInCheck |= (1UL << i);
-                        GameObject tile = GameObject.Find(i.ToString());
-                        tile.GetComponent<Renderer>().material.color = Color.green;
-                        Debug.Log("- Can move to " + GetAlgebraicNotation(i) + " to escape check");
+                    // Check queenside castling
+                    if (!bitboard.whiteQueensideRookMoved) {
+                        ulong pathMask = (1UL << 1) | (1UL << 2) | (1UL << 3); // b1, c1, d1
+                        if ((bitboard.returnAllPieces() & pathMask) == 0) {
+                            // Add the castling move regardless of check status for now
+                            possibleMoves |= 1UL << 2; // c1
+                            Debug.Log("Added white queenside castling move");
+                        }
                     }
                 }
             }
-            
-            // Replace the possible moves with only the ones that address check
-            possibleMoves = legalMovesInCheck;
-            
-            if (possibleMoves == 0)
-            {
-                Debug.Log("Checkmate! No legal moves to escape check.");
-            }
-        }
-        else
-        {
-            // If not in check, display all legal moves as usual
-            bool hasMoves = false;
-            
-            for (int i = 0; i < 64; i++)
-            {
-                if ((possibleMoves & (1UL << i)) != 0)
-                {
-                    hasMoves = true;
-                    GameObject tile = GameObject.Find(i.ToString());
-                    tile.GetComponent<Renderer>().material.color = Color.green;
-                    Debug.Log("- Can move to " + GetAlgebraicNotation(i));
+            // Add castling moves explicitly for black king
+            else if (!selectedPieceIsWhite && TileIndex == 60) { // Black king at e8
+                if (!bitboard.blackKingMoved) {
+                    // Check kingside castling
+                    if (!bitboard.blackKingsideRookMoved) {
+                        ulong pathMask = (1UL << 61) | (1UL << 62); // f8, g8
+                        if ((bitboard.returnAllPieces() & pathMask) == 0) {
+                            // Add the castling move regardless of check status for now
+                            possibleMoves |= 1UL << 62; // g8
+                            Debug.Log("Added black kingside castling move");
+                        }
+                    }
+                    
+                    // Check queenside castling
+                    if (!bitboard.blackQueensideRookMoved) {
+                        ulong pathMask = (1UL << 57) | (1UL << 58) | (1UL << 59); // b8, c8, d8
+                        if ((bitboard.returnAllPieces() & pathMask) == 0) {
+                            // Add the castling move regardless of check status for now
+                            possibleMoves |= 1UL << 58; // c8
+                            Debug.Log("Added black queenside castling move");
+                        }
+                    }
                 }
             }
-            
-            if (!hasMoves)
+        }
+        
+        // Rest of the method remains the same...
+        // Highlight all possible move squares
+        for (int i = 0; i < 64; i++)
+        {
+            if ((possibleMoves & (1UL << i)) != 0)
             {
-                Debug.Log("No legal moves available - potential stalemate");
+                GameObject tile = GameObject.Find(i.ToString());
+                if (tile != null)
+                {
+                    tile.GetComponent<Renderer>().material.color = Color.green;
+                    Debug.Log("- Can move to " + BitboardUtils.IndexToAlgebraic(i));
+                }
+                else
+                {
+                    Debug.LogError("Could not find tile " + i);
+                }
             }
         }
         
@@ -688,77 +904,380 @@ public class BoardController : MonoBehaviour
     }
     
     private GameObject FindPieceAtPosition(int bitIndex)
-    {
-        Vector3 worldPos = GetWorldPositionForBit(bitIndex);
-        Collider[] colliders = Physics.OverlapSphere(worldPos, 0.4f);
-        foreach (Collider collider in colliders)
         {
-            if (collider.tag == "ChessPiece")
+            Vector3 worldPos = GetWorldPositionForBit(bitIndex);
+            
+            // Use a much smaller radius to ensure we only get pieces in this exact square
+            // 0.2f should be small enough to avoid picking up pieces from adjacent squares
+            Collider[] colliders = Physics.OverlapSphere(worldPos, 0.2f);
+            
+            // Sort colliders by distance to ensure we get the closest one
+            System.Array.Sort(colliders, (a, b) => 
+                Vector3.Distance(a.transform.position, worldPos).CompareTo(
+                Vector3.Distance(b.transform.position, worldPos)));
+            
+            foreach (Collider collider in colliders)
             {
-                return collider.gameObject;
+                if (collider.tag == "ChessPiece")
+                {
+                    return collider.gameObject;
+                }
             }
+            return null;
         }
-        return null;
-    }
     
     private void MovePiece(int fromIndex, int toIndex)
     {
         // Debug the move indexes
         Debug.Log("Moving from bit " + fromIndex + " to bit " + toIndex);
-        Debug.Log("That's from position " + GetAlgebraicNotation(fromIndex) + " to " + GetAlgebraicNotation(toIndex));
+        Debug.Log("That's from position " + BitboardUtils.IndexToAlgebraic(fromIndex) + " to " + BitboardUtils.IndexToAlgebraic(toIndex));
         
-        // Verify the move is legal
-        if (debugMode && !IsMoveLegal(fromIndex, toIndex))
+        // Determine the piece type and color BEFORE making any changes
+        PieceType movingPieceType = selectedPieceType;
+        bool isWhitePiece = selectedPieceIsWhite;
+        
+        // Check for castling moves
+        bool isCastling = false;
+        int rookFromIndex = -1;
+        int rookToIndex = -1;
+        
+        // White king castling
+        if (movingPieceType == PieceType.King && isWhitePiece && fromIndex == 4) // e1
         {
-            Debug.LogError("Illegal move attempted!");
-            // You might want to add additional handling here
-            return;
+            // Kingside castling
+            if (toIndex == 6) // g1
+            {
+                isCastling = true;
+                rookFromIndex = 7; // h1
+                rookToIndex = 5;   // f1
+                Debug.Log("White kingside castling");
+            }
+            // Queenside castling
+            else if (toIndex == 2) // c1
+            {
+                isCastling = true;
+                rookFromIndex = 0; // a1
+                rookToIndex = 3;   // d1
+                Debug.Log("White queenside castling");
+            }
         }
+        // Black king castling
+        else if (movingPieceType == PieceType.King && !isWhitePiece && fromIndex == 60) // e8
+        {
+            // Kingside castling
+            if (toIndex == 62) // g8
+            {
+                isCastling = true;
+                rookFromIndex = 63; // h8
+                rookToIndex = 61;   // f8
+                Debug.Log("Black kingside castling");
+            }
+            // Queenside castling
+            else if (toIndex == 58) // c8
+            {
+                isCastling = true;
+                rookFromIndex = 56; // a8
+                rookToIndex = 59;   // d8
+                Debug.Log("Black queenside castling");
+            }
+        }
+        
+        // Update castling flags
+        
         
         // Check if there's a piece at the destination (capture)
         GameObject capturedPiece = FindPieceAtPosition(toIndex);
         if (capturedPiece != null)
         {
             Debug.Log("Capturing: " + capturedPiece.name);
-            Destroy(capturedPiece);
+            DestroyImmediate(capturedPiece);
         }
         
         // Move the piece in the bitboard
-        Move move = new Move(fromIndex, toIndex, previousMove, (int)selectedPieceType, selectedPieceIsWhite);
+        Move move = new Move(fromIndex, toIndex, previousMove, (int)movingPieceType, isWhitePiece);
         bitboard.UpdateBitBoard(move);
-
-        //Update the Move in the previousMove to keep track of the move that got to the current board state
         previousMove = move;
-        
+
+        Debug.Log($"Creating move: Type={movingPieceType}, IsWhite={isWhitePiece}, From={BitboardUtils.IndexToAlgebraic(fromIndex)}, To={BitboardUtils.IndexToAlgebraic(toIndex)}");
         // Calculate the exact world position for the destination
         Vector3 destinationPosition = GetWorldPositionForBit(toIndex);
-        Debug.Log("Moving to world position: " + destinationPosition);
         
-        // Move the piece in the scene
-        selectedPiece.transform.position = destinationPosition;
+        // Get the correct prefab based on piece type and color
+        GameObject prefabToUse = GetPrefabForPiece(movingPieceType, isWhitePiece);
         
-        // Update the piece name with the new position
-        string pieceName = selectedPiece.name;
-        if (pieceName.Contains("_"))
+        if (prefabToUse != null)
         {
-            pieceName = pieceName.Substring(0, pieceName.IndexOf("_") + 1) + toIndex;
-            selectedPiece.name = pieceName;
+            // Destroy the old piece GameObject
+            DestroyImmediate(selectedPiece);
+            
+            // Create a new piece GameObject at the destination
+            string pieceName = (isWhitePiece ? "White" : "Black") + 
+                            GetPieceTypeName(movingPieceType) + "_" + toIndex;
+            
+            GameObject newPiece = Instantiate(prefabToUse, destinationPosition, Quaternion.identity, PieceParent);
+            newPiece.name = pieceName;
+            
+            Debug.Log("Created new piece: " + newPiece.name + " at " + BitboardUtils.IndexToAlgebraic(toIndex));
         }
         
-        Debug.Log("Moved " + selectedPiece.name + " from " + fromIndex + " to " + toIndex);
+        // Handle castling rook movement
+        if (isCastling)
+        {
+            Debug.Log($"Executing castling move: {(isWhitePiece ? "White" : "Black")} {(toIndex == 6 || toIndex == 62 ? "kingside" : "queenside")}");
+            
+            // Find the rook object
+            GameObject rookObject = FindPieceAtPosition(rookFromIndex);
+            if (rookObject != null)
+            {
+                Debug.Log($"Found rook at {BitboardUtils.IndexToAlgebraic(rookFromIndex)}");
+                
+                // Move the rook in the bitboard
+                Move rookMove = new Move(rookFromIndex, rookToIndex, null, (int)PieceType.Rook, isWhitePiece);
+                bitboard.UpdateBitBoard(rookMove);
+                
+                // Get the world position for the rook
+                Vector3 rookDestination = GetWorldPositionForBit(rookToIndex);
+                
+                // Get the correct rook prefab
+                GameObject rookPrefab = isWhitePiece ? whiteRookPrefab : blackRookPrefab;
+                
+                // Destroy the old rook
+                DestroyImmediate(rookObject);
+                
+                // Create the new rook at the destination
+                string rookName = (isWhitePiece ? "White" : "Black") + "Rook_" + rookToIndex;
+                GameObject newRook = Instantiate(rookPrefab, rookDestination, Quaternion.identity, PieceParent);
+                newRook.name = rookName;
+                
+                Debug.Log($"Castling: Moved rook from {BitboardUtils.IndexToAlgebraic(rookFromIndex)} to {BitboardUtils.IndexToAlgebraic(rookToIndex)}");
+            }
+            else
+            {
+                Debug.LogError($"Castling rook not found at {BitboardUtils.IndexToAlgebraic(rookFromIndex)}. Verifying board state...");
+                VerifyBoardState();
+                
+                // Try to find the rook again after verification
+                rookObject = FindPieceAtPosition(rookFromIndex);
+                if (rookObject != null) {
+                    Debug.Log($"Found rook after verification at {BitboardUtils.IndexToAlgebraic(rookFromIndex)}");
+                    
+                    // Move the rook in the bitboard
+                    Move rookMove = new Move(rookFromIndex, rookToIndex, null, (int)PieceType.Rook, isWhitePiece);
+                    bitboard.UpdateBitBoard(rookMove);
+                    
+                    // Get the world position for the rook
+                    Vector3 rookDestination = GetWorldPositionForBit(rookToIndex);
+                    
+                    // Get the correct rook prefab
+                    GameObject rookPrefab = isWhitePiece ? whiteRookPrefab : blackRookPrefab;
+                    
+                    // Destroy the old rook
+                    DestroyImmediate(rookObject);
+                    
+                    // Create the new rook at the destination
+                    string rookName = (isWhitePiece ? "White" : "Black") + "Rook_" + rookToIndex;
+                    GameObject newRook = Instantiate(rookPrefab, rookDestination, Quaternion.identity, PieceParent);
+                    newRook.name = rookName;
+                    
+                    Debug.Log($"Castling: Moved rook from {BitboardUtils.IndexToAlgebraic(rookFromIndex)} to {BitboardUtils.IndexToAlgebraic(rookToIndex)}");
+                } else {
+                    // Create the rook at the destination anyway, since we know it should be there
+                    Debug.Log($"Creating missing rook at destination {BitboardUtils.IndexToAlgebraic(rookToIndex)}");
+                    
+                    // Move the rook in the bitboard
+                    Move rookMove = new Move(rookFromIndex, rookToIndex, null, (int)PieceType.Rook, isWhitePiece);
+                    bitboard.UpdateBitBoard(rookMove);
+                    
+                    Vector3 rookDestination = GetWorldPositionForBit(rookToIndex);
+                    GameObject rookPrefab = isWhitePiece ? whiteRookPrefab : blackRookPrefab;
+                    string rookName = (isWhitePiece ? "White" : "Black") + "Rook_" + rookToIndex;
+                    GameObject newRook = Instantiate(rookPrefab, rookDestination, Quaternion.identity, PieceParent);
+                    newRook.name = rookName;
+                }
+            }
+        }
         
         // Debug the board state after the move
         if (debugMode) DebugPrintBoard();
+        
+        // Check that the visual state matches the logical state
+        VerifyBoardState();
     }
-    
-    // Convert a bitboard index to algebraic notation (e.g., e4)
-    private string GetAlgebraicNotation(int index)
+    private GameObject GetPrefabForPiece(PieceType pieceType, bool isWhite)
     {
-        int file = index % 8;
-        int rank = index / 8;
-        char fileChar = (char)('a' + file);
-        int rankNum = rank + 1;
-        return fileChar.ToString() + rankNum.ToString();
+        switch (pieceType)
+        {
+            case PieceType.Pawn:
+                return isWhite ? whitePawnPrefab : blackPawnPrefab;
+            case PieceType.Rook:
+                return isWhite ? whiteRookPrefab : blackRookPrefab;
+            case PieceType.Knight:
+                return isWhite ? whiteKnightPrefab : blackKnightPrefab;
+            case PieceType.Bishop:
+                return isWhite ? whiteBishopPrefab : blackBishopPrefab;
+            case PieceType.Queen:
+                return isWhite ? whiteQueenPrefab : blackQueenPrefab;
+            case PieceType.King:
+                return isWhite ? whiteKingPrefab : blackKingPrefab;
+            default:
+                Debug.LogError("Unknown piece type: " + pieceType);
+                return null;
+        }
+    }
+    private string GetPieceTypeName(PieceType pieceType)
+    {
+        switch (pieceType)
+        {
+            case PieceType.Pawn: return "Pawn";
+            case PieceType.Rook: return "Rook";
+            case PieceType.Knight: return "Knight";
+            case PieceType.Bishop: return "Bishop";
+            case PieceType.Queen: return "Queen";
+            case PieceType.King: return "King";
+            default: return "Unknown";
+        }
+    }
+    private PieceType GetPieceTypeFromName(string pieceName)
+    {
+        if (pieceName.Contains("Pawn")) return PieceType.Pawn;
+        if (pieceName.Contains("Rook")) return PieceType.Rook;
+        if (pieceName.Contains("Knight")) return PieceType.Knight;
+        if (pieceName.Contains("Bishop")) return PieceType.Bishop;
+        if (pieceName.Contains("Queen")) return PieceType.Queen;
+        if (pieceName.Contains("King")) return PieceType.King;
+        
+        Debug.LogError("Unknown piece name: " + pieceName);
+        return PieceType.Pawn; // Default
+    }
+    private void VerifyBoardState()
+    {
+        // This will check that the visual pieces match the logical bitboard
+        Debug.Log("Verifying board state consistency...");
+        
+        // Check all 64 squares
+        for (int i = 0; i < 64; i++)
+        {
+            ulong bitMask = 1UL << i;
+            
+            // Check what's in the bitboard at this position
+            bool hasPieceInBitboard = false;
+            string expectedPiece = "";
+            
+            if ((bitboard.WhitePawn & bitMask) != 0)
+            {
+                hasPieceInBitboard = true;
+                expectedPiece = "WhitePawn";
+            }
+            else if ((bitboard.WhiteRook & bitMask) != 0)
+            {
+                hasPieceInBitboard = true;
+                expectedPiece = "WhiteRook";
+            }
+            else if ((bitboard.WhiteKnight & bitMask) != 0)
+            {
+                hasPieceInBitboard = true;
+                expectedPiece = "WhiteKnight";
+            }
+            else if ((bitboard.WhiteBishop & bitMask) != 0)
+            {
+                hasPieceInBitboard = true;
+                expectedPiece = "WhiteBishop";
+            }
+            else if ((bitboard.WhiteQueen & bitMask) != 0)
+            {
+                hasPieceInBitboard = true;
+                expectedPiece = "WhiteQueen";
+            }
+            else if ((bitboard.WhiteKing & bitMask) != 0)
+            {
+                hasPieceInBitboard = true;
+                expectedPiece = "WhiteKing";
+            }
+            else if ((bitboard.BlackPawn & bitMask) != 0)
+            {
+                hasPieceInBitboard = true;
+                expectedPiece = "BlackPawn";
+            }
+            else if ((bitboard.BlackRook & bitMask) != 0)
+            {
+                hasPieceInBitboard = true;
+                expectedPiece = "BlackRook";
+            }
+            else if ((bitboard.BlackKnight & bitMask) != 0)
+            {
+                hasPieceInBitboard = true;
+                expectedPiece = "BlackKnight";
+            }
+            else if ((bitboard.BlackBishop & bitMask) != 0)
+            {
+                hasPieceInBitboard = true;
+                expectedPiece = "BlackBishop";
+            }
+            else if ((bitboard.BlackQueen & bitMask) != 0)
+            {
+                hasPieceInBitboard = true;
+                expectedPiece = "BlackQueen";
+            }
+            else if ((bitboard.BlackKing & bitMask) != 0)
+            {
+                hasPieceInBitboard = true;
+                expectedPiece = "BlackKing";
+            }
+            
+            // Check what GameObject is at this position
+            GameObject pieceObject = FindPieceAtPosition(i);
+            
+            // Compare and fix any inconsistencies
+            if (hasPieceInBitboard && pieceObject == null)
+            {
+                // Piece in bitboard but not on board visually
+                Debug.LogError($"Inconsistency at {BitboardUtils.IndexToAlgebraic(i)}: Bitboard has {expectedPiece} but no visual piece exists");
+                
+                // Create the missing piece
+                PieceType pieceType = GetPieceTypeFromName(expectedPiece);
+                bool isWhite = expectedPiece.StartsWith("White");
+                GameObject prefab = GetPrefabForPiece(pieceType, isWhite);
+                
+                if (prefab != null)
+                {
+                    GameObject newPiece = Instantiate(prefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
+                    newPiece.name = expectedPiece + "_" + i;
+                    Debug.Log($"Created missing piece {newPiece.name} at {BitboardUtils.IndexToAlgebraic(i)}");
+                }
+            }
+            else if (!hasPieceInBitboard && pieceObject != null)
+            {
+                // Piece on board visually but not in bitboard
+                Debug.LogError($"Inconsistency at {BitboardUtils.IndexToAlgebraic(i)}: Visual piece {pieceObject.name} exists but not in bitboard");
+                
+                // Remove the inconsistent piece
+                DestroyImmediate(pieceObject);
+                Debug.Log($"Removed inconsistent piece at {BitboardUtils.IndexToAlgebraic(i)}");
+            }
+            else if (hasPieceInBitboard && pieceObject != null)
+            {
+                // Both exist, but check if they match
+                if (!pieceObject.name.StartsWith(expectedPiece))
+                {
+                    Debug.LogError($"Mismatch at {BitboardUtils.IndexToAlgebraic(i)}: Bitboard has {expectedPiece} but visual piece is {pieceObject.name}");
+                    
+                    // Fix the mismatch by replacing the piece
+                    PieceType pieceType = GetPieceTypeFromName(expectedPiece);
+                    bool isWhite = expectedPiece.StartsWith("White");
+                    GameObject prefab = GetPrefabForPiece(pieceType, isWhite);
+                    
+                    if (prefab != null)
+                    {
+                        DestroyImmediate(pieceObject);
+                        GameObject newPiece = Instantiate(prefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent);
+                        newPiece.name = expectedPiece + "_" + i;
+                        Debug.Log($"Replaced mismatched piece with {newPiece.name} at {BitboardUtils.IndexToAlgebraic(i)}");
+                    }
+                }
+            }
+        }
+        
+        Debug.Log("Board state verification complete");
     }
     
     // Convert a bitboard index to a world position

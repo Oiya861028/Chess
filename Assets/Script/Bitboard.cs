@@ -1,4 +1,3 @@
-
 using System;
 using UnityEngine;
 using System.Collections.Generic;
@@ -17,12 +16,24 @@ public class Bitboard {
     public ulong BlackBishop = 0b0010010000000000000000000000000000000000000000000000000000000000;
     public ulong BlackQueen =  0b0001000000000000000000000000000000000000000000000000000000000000;
     public ulong BlackKing =   0b0000100000000000000000000000000000000000000000000000000000000000;
-    
+    public bool whiteKingMoved = false;
+    public bool blackKingMoved = false;
+    public bool whiteQueensideRookMoved = false;
+    public bool whiteKingsideRookMoved = false;
+    public bool blackQueensideRookMoved = false;
+    public bool blackKingsideRookMoved = false;
     Move previousMove;
     
     // Move stack to track captured pieces
     private class MoveState {
         public ulong[] capturedPieces = new ulong[12]; // Store all captured pieces
+        // Add castling flags to the state
+        public bool whiteKingMoved;
+        public bool blackKingMoved;
+        public bool whiteQueensideRookMoved;
+        public bool whiteKingsideRookMoved;
+        public bool blackQueensideRookMoved;
+        public bool blackKingsideRookMoved;
     }
     
     private Stack<MoveState> moveStack = new Stack<MoveState>();
@@ -89,10 +100,57 @@ public class Bitboard {
     public void UpdateBitBoard(Move move) {
         // Create a new state to track what might be captured in this move
         MoveState state = new MoveState();
-        
         ulong sourceMask = 1UL << move.Source;
         ulong destinationMask = 1UL << move.Destination;
+        state.whiteKingMoved = whiteKingMoved;
+        state.blackKingMoved = blackKingMoved;
+        state.whiteQueensideRookMoved = whiteQueensideRookMoved;
+        state.whiteKingsideRookMoved = whiteKingsideRookMoved;
+        state.blackQueensideRookMoved = blackQueensideRookMoved;
+        state.blackKingsideRookMoved = blackKingsideRookMoved;
+        if (move.PieceType == (int)PieceType.King) {
+            if (move.IsWhite) {
+                whiteKingMoved = true;
+            } 
+            else {
+                blackKingMoved = true;
+            }
+        }
+        else if (move.PieceType == (int)PieceType.Rook) {
+            if (move.IsWhite) {
+                if (move.Source == 0) { // White rook at a1 (queenside)
+                    whiteQueensideRookMoved = true;
+                } 
+                else if (move.Source == 7) { // White rook at h1 (kingside)
+                    whiteKingsideRookMoved = true;
+                }
+            } 
+            else {
+                if (move.Source == 56) { // Black rook at a8 (queenside)
+                    blackQueensideRookMoved = true;
+                } 
+                else if (move.Source == 63) { // Black rook at h8 (kingside)
+                    blackKingsideRookMoved = true;
+                }
+            }
+        }
 
+        // Also check if any rook is captured at its starting position
+        ulong whitePieceCapture = !move.IsWhite ? destinationMask : 0UL;
+        ulong blackPieceCapture = move.IsWhite ? destinationMask : 0UL;
+
+        if ((whitePieceCapture & (1UL << 0)) != 0) { // Capture at a1
+            whiteQueensideRookMoved = true;
+        }
+        if ((whitePieceCapture & (1UL << 7)) != 0) { // Capture at h1
+            whiteKingsideRookMoved = true;
+        }
+        if ((blackPieceCapture & (1UL << 56)) != 0) { // Capture at a8
+            blackQueensideRookMoved = true;
+        }
+        if ((blackPieceCapture & (1UL << 63)) != 0) { // Capture at h8
+            blackKingsideRookMoved = true;
+        }
         // Record any pieces that might be captured at the destination
         // White pieces that might be captured by black
         if (!move.IsWhite) {
@@ -182,7 +240,6 @@ public class Bitboard {
                 else BlackKing |= destinationMask;
                 break;
         }
-
         // Push the state onto our stack
         moveStack.Push(state);
         previousMove = move;
@@ -267,6 +324,12 @@ public class Bitboard {
             BlackBishop |= state.capturedPieces[BLACK_BISHOP];
             BlackRook |= state.capturedPieces[BLACK_ROOK];
             BlackQueen |= state.capturedPieces[BLACK_QUEEN];
+            whiteKingMoved = state.whiteKingMoved;
+            blackKingMoved = state.blackKingMoved;
+            whiteQueensideRookMoved = state.whiteQueensideRookMoved;
+            whiteKingsideRookMoved = state.whiteKingsideRookMoved;
+            blackQueensideRookMoved = state.blackQueensideRookMoved;
+            blackKingsideRookMoved = state.blackKingsideRookMoved;
         }
         
         previousMove = previousMove.previousMove; //set the previous move to the move before the last move
