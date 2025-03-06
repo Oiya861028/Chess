@@ -535,7 +535,7 @@ public class BoardController : MonoBehaviour
             if ((WhiteRook & (1UL << i)) != 0)
                 Instantiate(whiteRookPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent).name = "WhiteRook_" + i;
             if ((WhiteKnight & (1UL << i)) != 0)
-                Instantiate(whiteKnightPrefab, GetWorldPositionForBit(i), Quaternion.Euler(0,180,0), PieceParent).name = "WhiteKnight_" + i;
+                Instantiate(whiteKnightPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent).name = "WhiteKnight_" + i;
             if ((WhiteBishop & (1UL << i)) != 0)
                 Instantiate(whiteBishopPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent).name = "WhiteBishop_" + i;
             if ((WhiteQueen & (1UL << i)) != 0)
@@ -798,73 +798,66 @@ public class BoardController : MonoBehaviour
         
         // Get all possible moves for this piece
         possibleMoves = findMoves.GetPossibleMoves(TileIndex);
-        
-        // Force add castling moves for King
+        Debug.Log("Possible moves bitboard: " + possibleMoves);
         if (selectedPieceType == PieceType.King) {
-            Debug.Log("Checking castling moves for " + (selectedPieceIsWhite ? "white" : "black") + " king");
-            
-            // Debug castling state
-            if (selectedPieceIsWhite) {
-                Debug.Log($"White castling state - King moved: {bitboard.whiteKingMoved}, " +
-                        $"Kingside rook moved: {bitboard.whiteKingsideRookMoved}, " + 
-                        $"Queenside rook moved: {bitboard.whiteQueensideRookMoved}");
-            } else {
-                Debug.Log($"Black castling state - King moved: {bitboard.blackKingMoved}, " +
-                        $"Kingside rook moved: {bitboard.blackKingsideRookMoved}, " + 
-                        $"Queenside rook moved: {bitboard.blackQueensideRookMoved}");
-            }
-            
-            // Add castling moves explicitly for white king
-            if (selectedPieceIsWhite && TileIndex == 4) { // White king at e1
-                if (!bitboard.whiteKingMoved) {
-                    // Check kingside castling
-                    if (!bitboard.whiteKingsideRookMoved) {
-                        ulong pathMask = (1UL << 5) | (1UL << 6); // f1, g1
-                        if ((bitboard.returnAllPieces() & pathMask) == 0) {
-                            // Add the castling move regardless of check status for now
-                            possibleMoves |= 1UL << 6; // g1
-                            Debug.Log("Added white kingside castling move");
-                        }
-                    }
+        Debug.Log("Checking castling moves for " + (selectedPieceIsWhite ? "white" : "black") + " king");
+        
+        // Debug castling state
+        if (selectedPieceIsWhite) {
+            Debug.Log($"White castling state - King moved: {bitboard.whiteKingMoved}, " +
+                    $"Kingside rook moved: {bitboard.whiteKingsideRookMoved}, " + 
+                    $"Queenside rook moved: {bitboard.whiteQueensideRookMoved}");
+        } else {
+            Debug.Log($"Black castling state - King moved: {bitboard.blackKingMoved}, " +
+                    $"Kingside rook moved: {bitboard.blackKingsideRookMoved}, " + 
+                    $"Queenside rook moved: {bitboard.blackQueensideRookMoved}");
+        }
+        
+        // Add castling moves explicitly
+        if (selectedPieceIsWhite && TileIndex == 4) { // White king at e1
+            if (!bitboard.whiteKingMoved) {
+                // Check kingside castling
+                if (!bitboard.whiteKingsideRookMoved && 
+                    (bitboard.returnAllPieces() & ((1UL << 5) | (1UL << 6))) == 0 && 
+                    !IsInCheck(true)) {
                     
-                    // Check queenside castling
-                    if (!bitboard.whiteQueensideRookMoved) {
-                        ulong pathMask = (1UL << 1) | (1UL << 2) | (1UL << 3); // b1, c1, d1
-                        if ((bitboard.returnAllPieces() & pathMask) == 0) {
-                            // Add the castling move regardless of check status for now
-                            possibleMoves |= 1UL << 2; // c1
-                            Debug.Log("Added white queenside castling move");
-                        }
-                    }
+                    possibleMoves |= 1UL << 6; // g1
+                    Debug.Log("Added white kingside castling move");
                 }
-            }
-            // Add castling moves explicitly for black king
-            else if (!selectedPieceIsWhite && TileIndex == 60) { // Black king at e8
-                if (!bitboard.blackKingMoved) {
-                    // Check kingside castling
-                    if (!bitboard.blackKingsideRookMoved) {
-                        ulong pathMask = (1UL << 61) | (1UL << 62); // f8, g8
-                        if ((bitboard.returnAllPieces() & pathMask) == 0) {
-                            // Add the castling move regardless of check status for now
-                            possibleMoves |= 1UL << 62; // g8
-                            Debug.Log("Added black kingside castling move");
-                        }
-                    }
+                
+                // Check queenside castling
+                if (!bitboard.whiteQueensideRookMoved && 
+                    (bitboard.returnAllPieces() & ((1UL << 1) | (1UL << 2) | (1UL << 3))) == 0 && 
+                    !IsInCheck(true)) {
                     
-                    // Check queenside castling
-                    if (!bitboard.blackQueensideRookMoved) {
-                        ulong pathMask = (1UL << 57) | (1UL << 58) | (1UL << 59); // b8, c8, d8
-                        if ((bitboard.returnAllPieces() & pathMask) == 0) {
-                            // Add the castling move regardless of check status for now
-                            possibleMoves |= 1UL << 58; // c8
-                            Debug.Log("Added black queenside castling move");
-                        }
-                    }
+                    possibleMoves |= 1UL << 2; // c1
+                    Debug.Log("Added white queenside castling move");
                 }
             }
         }
+        else if (!selectedPieceIsWhite && TileIndex == 60) { // Black king at e8
+            if (!bitboard.blackKingMoved) {
+                // Check kingside castling
+                if (!bitboard.blackKingsideRookMoved && 
+                    (bitboard.returnAllPieces() & ((1UL << 61) | (1UL << 62))) == 0 && 
+                    !IsInCheck(false)) {
+                    
+                    possibleMoves |= 1UL << 62; // g8
+                    Debug.Log("Added black kingside castling move");
+                }
+                
+                // Check queenside castling
+                if (!bitboard.blackQueensideRookMoved && 
+                    (bitboard.returnAllPieces() & ((1UL << 57) | (1UL << 58) | (1UL << 59))) == 0 && 
+                    !IsInCheck(false)) {
+                    
+                    possibleMoves |= 1UL << 58; // c8
+                    Debug.Log("Added black queenside castling move");
+                }
+            }
+        }
+    }
         
-        // Rest of the method remains the same...
         // Highlight all possible move squares
         for (int i = 0; i < 64; i++)
         {
