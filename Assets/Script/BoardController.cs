@@ -535,7 +535,7 @@ public class BoardController : MonoBehaviour
             if ((WhiteRook & (1UL << i)) != 0)
                 Instantiate(whiteRookPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent).name = "WhiteRook_" + i;
             if ((WhiteKnight & (1UL << i)) != 0)
-                Instantiate(whiteKnightPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent).name = "WhiteKnight_" + i;
+                Instantiate(whiteKnightPrefab, GetWorldPositionForBit(i), Quaternion.Euler(0,180,0), PieceParent).name = "WhiteKnight_" + i;
             if ((WhiteBishop & (1UL << i)) != 0)
                 Instantiate(whiteBishopPrefab, GetWorldPositionForBit(i), Quaternion.identity, PieceParent).name = "WhiteBishop_" + i;
             if ((WhiteQueen & (1UL << i)) != 0)
