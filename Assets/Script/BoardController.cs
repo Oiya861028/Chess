@@ -198,12 +198,11 @@ public class BoardController : MonoBehaviour
         if (isWhiteTurn && DetectCheckmate(true))
         {
             Debug.Log("Checkmate! Black wins!");
-            // You could add game over UI elements or other handling here
+            
         }
         else if (!isWhiteTurn && DetectCheckmate(false))
         {
             Debug.Log("Checkmate! White wins!");
-            // You could add game over UI elements or other handling here
         }
         
         // Rest of Update method
@@ -211,7 +210,7 @@ public class BoardController : MonoBehaviour
         {
             HandleClick();
         }
-        else if (!isWhiteTurn && !aiIsThinking) // Assuming you've added aiIsThinking from previous fixes
+        else if (!isWhiteTurn && !aiIsThinking)
         {
             aiIsThinking = true;
             MakeAIMove();
@@ -386,7 +385,7 @@ public class BoardController : MonoBehaviour
             VerifyBoardState();
             
             // Get the best move from StockFridge
-            // IMPORTANT: Make sure we're passing false here since AI is playing as black
+    
             Move aiMove = AI.GetBestMove(depth, false, previousMove);
             
             if (aiMove != null)
@@ -506,7 +505,6 @@ public class BoardController : MonoBehaviour
         }
     }
 
-    // Rest of your methods remain largely unchanged...
     void InstantiateBoard()
     {
         Instantiate(boardPrefab, boardOrigin, Quaternion.identity);
@@ -578,7 +576,7 @@ public class BoardController : MonoBehaviour
 
         if (Physics.Raycast(ray, out hit))
         {
-            // Case 1: Clicked on a highlighted tile or a piece on a highlighted tile - this is a move destination
+
             int clickedTileIndex = -1;
             
             // If clicked directly on a tile
@@ -626,7 +624,6 @@ public class BoardController : MonoBehaviour
                 return;
             }
 
-            // Case 2: Clicked on a chess tile - select it for highlighting moves
             if (hit.collider.tag == "ChessTile")
             {
                 // Clean up previous selection
@@ -900,8 +897,6 @@ public class BoardController : MonoBehaviour
         {
             Vector3 worldPos = GetWorldPositionForBit(bitIndex);
             
-            // Use a much smaller radius to ensure we only get pieces in this exact square
-            // 0.2f should be small enough to avoid picking up pieces from adjacent squares
             Collider[] colliders = Physics.OverlapSphere(worldPos, 0.2f);
             
             // Sort colliders by distance to ensure we get the closest one
@@ -1281,10 +1276,7 @@ public class BoardController : MonoBehaviour
         // - Bit 63 is h8 (top-right from white's perspective)
         int file = bitIndex % 8;            // 0-7 (a-h files)
         int rank = bitIndex / 8;            // 0-7 (1-8 ranks)
-        
-        // Looking at the issue description (e3 goes to e6), 
-        // it seems the rank is being flipped (rank 3 becomes rank 6)
-        // Let's try flipping the rank instead of the file
+    
         rank = 7 - rank;  // Flip the rank (1=7, 8=0)
         
         return boardOrigin + new Vector3(file * squareSize, 0f, rank * squareSize);
