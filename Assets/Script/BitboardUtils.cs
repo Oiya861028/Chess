@@ -4,7 +4,7 @@ using UnityEngine;
 
 public static class BitboardUtils
 {
-    // Convert a bitboard index to algebraic notation (e.g., e4)
+    // Convert a bitboard index to algebraic notation
     public static string IndexToAlgebraic(int index)
     {
         int file = index % 8;
@@ -60,7 +60,7 @@ public static class BitboardUtils
         return count;
     }
     
-    // Print a bitboard in a human-readable format
+    // Print a bitboard 
     public static void PrintBitboard(ulong bitboard, string label = "Bitboard")
     {
         Debug.Log($"--- {label} ---");
