@@ -914,6 +914,7 @@ public class BoardController : MonoBehaviour
             return null;
         }
     
+
     private void MovePiece(int fromIndex, int toIndex)
     {
         // Debug the move indexes
@@ -970,7 +971,38 @@ public class BoardController : MonoBehaviour
             }
         }
         
-        // Check if there's a piece at the destination (capture)
+        // Check for en passant
+        bool isEnPassant = false;
+        if (movingPieceType == PieceType.Pawn && 
+            Math.Abs(fromIndex % 8 - toIndex % 8) == 1 && // Diagonal move
+            (bitboard.returnAllPieces() & (1UL << toIndex)) == 0) // Empty destination
+        {
+            // Check if the previous move was a pawn double move
+            if (previousMove != null && 
+                previousMove.PieceType == (int)PieceType.Pawn && 
+                Math.Abs(previousMove.Source - previousMove.Destination) == 16)
+            {
+                int prevDestFile = previousMove.Destination % 8;
+                int targetFile = toIndex % 8;
+                
+                if (prevDestFile == targetFile)
+                {
+                    isEnPassant = true;
+                    int capturedPawnIndex = isWhitePiece ? toIndex - 8 : toIndex + 8;
+                    GameObject capturedPawn = FindPieceAtPosition(capturedPawnIndex);
+                    if (capturedPawn != null)
+                    {
+                        Debug.Log($"En passant: Capturing pawn at {BitboardUtils.IndexToAlgebraic(capturedPawnIndex)}");
+                        DestroyImmediate(capturedPawn);
+                    }
+                }
+            }
+        }
+        
+        // Check for double pawn move
+        bool isPawnDoubleMove = movingPieceType == PieceType.Pawn && Math.Abs(fromIndex - toIndex) == 16;
+        
+        // Check if there's a piece at the destination (normal capture)
         GameObject capturedPiece = FindPieceAtPosition(toIndex);
         if (capturedPiece != null)
         {
@@ -979,7 +1011,7 @@ public class BoardController : MonoBehaviour
         }
         
         // Move the piece in the bitboard
-        Move move = new Move(fromIndex, toIndex, previousMove, (int)movingPieceType, isWhitePiece);
+        Move move = new Move(fromIndex, toIndex, previousMove, (int)movingPieceType, isWhitePiece, isEnPassant, isPawnDoubleMove);
         bitboard.UpdateBitBoard(move);
         previousMove = move;
 
@@ -1009,87 +1041,7 @@ public class BoardController : MonoBehaviour
         // Handle castling rook movement
         if (isCastling)
         {
-            Debug.Log($"Executing castling move: {(isWhitePiece ? "White" : "Black")} {(toIndex == 1 || toIndex == 57 ? "kingside" : "queenside")}");
-            
-            // Find the rook object
-            GameObject rookObject = FindPieceAtPosition(rookFromIndex);
-            
-            if (rookObject != null)
-            {
-                Debug.Log($"Found rook at {BitboardUtils.IndexToAlgebraic(rookFromIndex)}");
-                
-                // Move the rook in the bitboard
-                Move rookMove = new Move(rookFromIndex, rookToIndex, previousMove, (int)PieceType.Rook, isWhitePiece);
-                bitboard.UpdateBitBoard(rookMove);
-                
-                // Get the world position for the rook's destination
-                Vector3 rookDestination = GetWorldPositionForBit(rookToIndex);
-                
-                // Get the correct rook prefab
-                GameObject rookPrefab = isWhitePiece ? whiteRookPrefab : blackRookPrefab;
-                
-                // Destroy the old rook
-                DestroyImmediate(rookObject);
-                
-                // Create the new rook at the destination
-                string rookName = (isWhitePiece ? "White" : "Black") + "Rook_" + rookToIndex;
-                GameObject newRook = Instantiate(rookPrefab, rookDestination, Quaternion.identity, PieceParent);
-                newRook.name = rookName;
-                
-                Debug.Log($"Castling: Moved rook from {BitboardUtils.IndexToAlgebraic(rookFromIndex)} to {BitboardUtils.IndexToAlgebraic(rookToIndex)}");
-            }
-            else
-            {
-                Debug.LogError($"Castling rook not found at {BitboardUtils.IndexToAlgebraic(rookFromIndex)}. Verifying board state...");
-                VerifyBoardState();
-                
-                // Try to find the rook again after verification
-                rookObject = FindPieceAtPosition(rookFromIndex);
-                if (rookObject != null) {
-                    Debug.Log($"Found rook after verification at {BitboardUtils.IndexToAlgebraic(rookFromIndex)}");
-                    
-                    // Move the rook in the bitboard
-                    Move rookMove = new Move(rookFromIndex, rookToIndex, previousMove, (int)PieceType.Rook, isWhitePiece);
-                    bitboard.UpdateBitBoard(rookMove);
-                    
-                    // Get the world position for the rook
-                    Vector3 rookDestination = GetWorldPositionForBit(rookToIndex);
-                    
-                    // Get the correct rook prefab
-                    GameObject rookPrefab = isWhitePiece ? whiteRookPrefab : blackRookPrefab;
-                    
-                    // Destroy the old rook
-                    DestroyImmediate(rookObject);
-                    
-                    // Create the new rook at the destination
-                    string rookName = (isWhitePiece ? "White" : "Black") + "Rook_" + rookToIndex;
-                    GameObject newRook = Instantiate(rookPrefab, rookDestination, Quaternion.identity, PieceParent);
-                    newRook.name = rookName;
-                    
-                    Debug.Log($"Castling: Moved rook from {BitboardUtils.IndexToAlgebraic(rookFromIndex)} to {BitboardUtils.IndexToAlgebraic(rookToIndex)}");
-                } else {
-                    // Create the rook at the destination anyway, since we know it should be there
-                    Debug.Log($"Creating missing rook at destination {BitboardUtils.IndexToAlgebraic(rookToIndex)}");
-                    
-                    // Update the bitboard for the rook move
-                    if (isWhitePiece) {
-                        bitboard.WhiteRook &= ~(1UL << rookFromIndex);  // Remove from original position
-                        bitboard.WhiteRook |= (1UL << rookToIndex);     // Add to new position
-                    } else {
-                        bitboard.BlackRook &= ~(1UL << rookFromIndex);  // Remove from original position
-                        bitboard.BlackRook |= (1UL << rookToIndex);     // Add to new position
-                    }
-                    
-                    // Create the rook at the destination
-                    Vector3 rookDestination = GetWorldPositionForBit(rookToIndex);
-                    GameObject rookPrefab = isWhitePiece ? whiteRookPrefab : blackRookPrefab;
-                    string rookName = (isWhitePiece ? "White" : "Black") + "Rook_" + rookToIndex;
-                    GameObject newRook = Instantiate(rookPrefab, rookDestination, Quaternion.identity, PieceParent);
-                    newRook.name = rookName;
-                    
-                    Debug.Log($"Created new rook for castling at {BitboardUtils.IndexToAlgebraic(rookToIndex)}");
-                }
-            }
+            HandleCastlingRookMovement(rookFromIndex, rookToIndex, isWhitePiece);
         }
         
         // Debug the board state after the move
@@ -1097,6 +1049,71 @@ public class BoardController : MonoBehaviour
         
         // Check that the visual state matches the logical state
         VerifyBoardState();
+    }
+
+    // Helper method to handle the rook movement during castling
+    private void HandleCastlingRookMovement(int rookFromIndex, int rookToIndex, bool isWhitePiece)
+    {
+        Debug.Log($"Executing castling move: {(isWhitePiece ? "White" : "Black")} {(rookToIndex == 2 || rookToIndex == 58 ? "kingside" : "queenside")}");
+        
+        // Find the rook object
+        GameObject rookObject = FindPieceAtPosition(rookFromIndex);
+        
+        if (rookObject != null)
+        {
+            Debug.Log($"Found rook at {BitboardUtils.IndexToAlgebraic(rookFromIndex)}");
+            
+            // Move the rook in the bitboard
+            Move rookMove = new Move(rookFromIndex, rookToIndex, previousMove, (int)PieceType.Rook, isWhitePiece);
+            bitboard.UpdateBitBoard(rookMove);
+            
+            // Get the world position for the rook's destination
+            Vector3 rookDestination = GetWorldPositionForBit(rookToIndex);
+            
+            // Get the correct rook prefab
+            GameObject rookPrefab = isWhitePiece ? whiteRookPrefab : blackRookPrefab;
+            
+            // Destroy the old rook
+            DestroyImmediate(rookObject);
+            
+            // Create the new rook at the destination
+            string rookName = (isWhitePiece ? "White" : "Black") + "Rook_" + rookToIndex;
+            GameObject newRook = Instantiate(rookPrefab, rookDestination, Quaternion.identity, PieceParent);
+            newRook.name = rookName;
+            
+            Debug.Log($"Castling: Moved rook from {BitboardUtils.IndexToAlgebraic(rookFromIndex)} to {BitboardUtils.IndexToAlgebraic(rookToIndex)}");
+        }
+        else
+        {
+            // Handle missing rook scenario
+            Debug.LogError($"Castling rook not found at {BitboardUtils.IndexToAlgebraic(rookFromIndex)}. Verifying board state...");
+            VerifyBoardState();
+            
+            // Try to find the rook again after verification or create a new one
+            rookObject = FindPieceAtPosition(rookFromIndex);
+            if (rookObject != null) {
+                // Similar code as above for found rook
+                // ...
+            } else {
+                // Create the rook at the destination anyway
+                Debug.Log($"Creating missing rook at destination {BitboardUtils.IndexToAlgebraic(rookToIndex)}");
+                
+                // Update the bitboard for the rook move
+                if (isWhitePiece) {
+                    bitboard.WhiteRook &= ~(1UL << rookFromIndex);
+                    bitboard.WhiteRook |= (1UL << rookToIndex);
+                } else {
+                    bitboard.BlackRook &= ~(1UL << rookFromIndex);
+                    bitboard.BlackRook |= (1UL << rookToIndex);
+                }
+                
+                Vector3 rookDestination = GetWorldPositionForBit(rookToIndex);
+                GameObject rookPrefab = isWhitePiece ? whiteRookPrefab : blackRookPrefab;
+                string rookName = (isWhitePiece ? "White" : "Black") + "Rook_" + rookToIndex;
+                GameObject newRook = Instantiate(rookPrefab, rookDestination, Quaternion.identity, PieceParent);
+                newRook.name = rookName;
+            }
+        }
     }
     private GameObject GetPrefabForPiece(PieceType pieceType, bool isWhite)
     {

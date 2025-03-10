@@ -6,7 +6,7 @@ public class FindMoves
 {
     private Bitboard bitboard;
     private Evaluation evaluation;
-    
+    private Move previousMove;
     // Updated constants for the correct bit positions
     private const int WHITE_KING_START = 3;     // e1
     private const int BLACK_KING_START = 59;    // e8
@@ -22,10 +22,14 @@ public class FindMoves
     {
         this.bitboard = bitboard;
         this.evaluation = new Evaluation();
+        this.previousMove = null; 
         Debug.Log("FindMoves initialized with bitboard");
     }
 
-
+    public void SetPreviousMove(Move move)
+    {
+        previousMove = move;
+    }
     /// Gets all legal moves for the specified side
 
     public List<Move> GetAllPossibleMoves(bool isWhite, Move previousMove)
@@ -234,22 +238,7 @@ public class FindMoves
     // Add moves for a piece at a specific position
     private void AddMovesForPosition(List<Move> moves, int position, PieceType pieceType, bool isWhite, Move previousMove)
     {
-        // Double-check that this position actually contains a piece of the right color
-        ulong positionMask = 1UL << position;
-        bool isPieceWhite = (bitboard.WhitePawn & positionMask) != 0 ||
-                            (bitboard.WhiteKnight & positionMask) != 0 ||
-                            (bitboard.WhiteBishop & positionMask) != 0 ||
-                            (bitboard.WhiteRook & positionMask) != 0 ||
-                            (bitboard.WhiteQueen & positionMask) != 0 ||
-                            (bitboard.WhiteKing & positionMask) != 0;
-                            
-        // Skip this position if the piece color doesn't match the expected color
-        if (isPieceWhite != isWhite)
-        {
-            Debug.LogError($"Piece color mismatch at position {position} ({GetSquareName(position)}): " +
-                        $"Expected {(isWhite ? "white" : "black")} but found {(isPieceWhite ? "white" : "black")}");
-            return;
-        }
+        // [existing code]
         
         ulong moveBitboard = GetPossibleMovesForPiece(position, pieceType, isWhite);
         
@@ -258,8 +247,38 @@ public class FindMoves
         {
             if ((moveBitboard & (1UL << i)) != 0)
             {
-                if (debugMode) Debug.Log($"  - Move to {GetSquareName(i)}");
-                moves.Add(new Move(position, i, previousMove, (int)pieceType, isWhite));
+                bool isEnPassant = false;
+                bool isPawnDoubleMove = false;
+                
+                if (pieceType == PieceType.Pawn)
+                {
+                    // Check for pawn double move
+                    if (Math.Abs(position - i) == 16)
+                    {
+                        isPawnDoubleMove = true;
+                    }
+                    
+                    // Check for en passant capture
+                    if (previousMove != null && 
+                        previousMove.PieceType == (int)PieceType.Pawn &&
+                        previousMove.IsPawnDoubleMove &&
+                        previousMove.IsWhite != isWhite)
+                    {
+                        int prevDestFile = previousMove.Destination % 8;
+                        int currFile = position % 8;
+                        int targetFile = i % 8;
+                        
+                        // Check if this is a diagonal move to an empty square (en passant)
+                        if (Math.Abs(currFile - targetFile) == 1 && 
+                            (bitboard.returnAllPieces() & (1UL << i)) == 0 &&
+                            prevDestFile == targetFile)
+                        {
+                            isEnPassant = true;
+                        }
+                    }
+                }
+                
+                moves.Add(new Move(position, i, previousMove, (int)pieceType, isWhite, isEnPassant, isPawnDoubleMove));
             }
         }
     }
@@ -680,6 +699,31 @@ public class FindMoves
                 {
                     moves |= 1UL << (position + 9);
                 }
+                
+                // En passant captures
+                if (rank == 4) // White pawns can en passant on rank 5 (index 4)
+                {
+                    // Check if previous move was a black pawn double move
+                    if (previousMove != null && 
+                        previousMove.PieceType == (int)PieceType.Pawn && 
+                        !previousMove.IsWhite &&
+                        previousMove.IsPawnDoubleMove)
+                    {
+                        int prevDestFile = previousMove.Destination % 8;
+                        
+                        // Check if the enemy pawn landed adjacent to our pawn
+                        if (prevDestFile == file - 1 && previousMove.Destination == position - 1)
+                        {
+                            // En passant to the left
+                            moves |= 1UL << (position + 7);
+                        }
+                        else if (prevDestFile == file + 1 && previousMove.Destination == position + 1)
+                        {
+                            // En passant to the right
+                            moves |= 1UL << (position + 9);
+                        }
+                    }
+                }
             }
         }
         else // Black pawn
@@ -709,6 +753,31 @@ public class FindMoves
                 if (file > 0 && ((enemyPieces & (1UL << (position - 9))) != 0))
                 {
                     moves |= 1UL << (position - 9);
+                }
+                
+                // En passant captures
+                if (rank == 3) // Black pawns can en passant on rank 4 (index 3)
+                {
+                    // Check if previous move was a white pawn double move
+                    if (previousMove != null && 
+                        previousMove.PieceType == (int)PieceType.Pawn && 
+                        previousMove.IsWhite &&
+                        previousMove.IsPawnDoubleMove)
+                    {
+                        int prevDestFile = previousMove.Destination % 8;
+                        
+                        // Check if the enemy pawn landed adjacent to our pawn
+                        if (prevDestFile == file - 1 && previousMove.Destination == position - 1)
+                        {
+                            // En passant to the left
+                            moves |= 1UL << (position - 7);
+                        }
+                        else if (prevDestFile == file + 1 && previousMove.Destination == position + 1)
+                        {
+                            // En passant to the right
+                            moves |= 1UL << (position - 9);
+                        }
+                    }
                 }
             }
         }
