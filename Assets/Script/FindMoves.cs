@@ -22,9 +22,9 @@ public class FindMoves
         Debug.Log("FindMoves initialized with bitboard");
     }
 
-    /// <summary>
+
     /// Gets all legal moves for the specified side
-    /// </summary>
+
     public List<Move> GetAllPossibleMoves(bool isWhite, Move previousMove)
     {
         if (debugMode) Debug.Log("GetAllPossibleMoves called for " + (isWhite ? "white" : "black"));
@@ -256,9 +256,9 @@ public class FindMoves
         }
     }
     
-    /// <summary>
-    /// Adds moves for all pieces of a specific type
-    /// </summary>
+
+    // Adds moves for all pieces of a specific type
+
     private void AddMovesForPieceType(List<Move> moves, ulong pieceBitboard, int pieceType, bool isWhite, Move previousMove)
     {
         // Process each piece of this type
@@ -286,10 +286,7 @@ public class FindMoves
             }
         }
     }
-    
-    /// <summary>
-    /// Filters out moves that would leave the king in check
-    /// </summary>
+   
     private List<Move> FilterLegalMoves(List<Move> moves, bool isWhite)
     {
         List<Move> legalMoves = new List<Move>();
@@ -323,9 +320,6 @@ public class FindMoves
         return legalMoves;
     }
     
-    /// <summary>
-    /// Returns all possible moves for a piece at the given position
-    /// </summary>
     public bool IsPiecePinned(int pieceIndex, bool isWhite)
     {
         // Find the king
@@ -376,7 +370,7 @@ public class FindMoves
             // If we hit a piece
             if ((bitboard.returnAllPieces() & squareMask) != 0)
             {
-                // Is it an enemy sliding piece that could pin?
+
                 bool isPinner = false;
                 
                 if (onSameRank || onSameFile)
@@ -429,10 +423,6 @@ public class FindMoves
         else
             return 0; // No piece at this position
     }
-    
-    /// <summary>
-    /// Calculate possible moves for a piece based on its type and color
-    /// </summary>
     private ulong GetPossibleMovesForPiece(int position, PieceType pieceType, bool isWhite)
     {  
         // Get combined piece bitboards
@@ -578,10 +568,6 @@ public class FindMoves
         
         return moves;
     }
-
-    /// <summary>
-    /// Calculate possible pawn moves
-    /// </summary>
     private ulong CalculatePawnMoves(int position, bool isWhite, ulong allPieces, ulong ownPieces, ulong enemyPieces)
     {
         ulong moves = 0;
@@ -654,9 +640,7 @@ public class FindMoves
         return moves;
     }
 
-    /// <summary>
-    /// Calculate possible knight moves
-    /// </summary>
+    // Calculate possible knight moves
     private ulong CalculateKnightMoves(int position, ulong friendlyPieces)
     {
         ulong knightPositionBitboard = 1UL << position;
@@ -707,9 +691,7 @@ public class FindMoves
         return knightMoves;
     }
 
-    /// <summary>
-    /// Calculate possible bishop moves
-    /// </summary>
+    // Calculate possible bishop moves
     private ulong CalculateBishopMoves(int position, ulong allPieces, ulong ownPieces)
     {
         ulong moves = 0;
@@ -758,9 +740,8 @@ public class FindMoves
         return moves;
     }
 
-    /// <summary>
-    /// Calculate possible rook moves
-    /// </summary>
+
+    // Calculate possible rook moves
     private ulong CalculateRookMoves(int position, ulong allPieces, ulong ownPieces)
     {
         ulong moves = 0;
@@ -809,18 +790,16 @@ public class FindMoves
         return moves;
     }
 
-    /// <summary>
-    /// Calculate possible queen moves (combines bishop and rook moves)
-    /// </summary>
+
+    // Calculate possible queen moves (combines bishop and rook moves)
     private ulong CalculateQueenMoves(int position, ulong allPieces, ulong ownPieces)
     {
         return CalculateBishopMoves(position, allPieces, ownPieces) | 
                CalculateRookMoves(position, allPieces, ownPieces);
     }
 
-    /// <summary>
-    /// Calculate possible king moves
-    /// </summary>
+
+    // Calculate possible king moves
     private ulong CalculateKingMoves(int position, ulong ownPieces)
     {
         ulong moves = 0;
@@ -855,9 +834,9 @@ public class FindMoves
         return moves;
     }
     
-    /// <summary>
-    /// Helper method to convert a position to algebraic notation (e.g., "e4")
-    /// </summary>
+
+
+
     private string GetSquareName(int position)
     {
         int rank = position / 8;
@@ -869,9 +848,9 @@ public class FindMoves
         return $"{fileChar}{rankChar}";
     }
     
-    /// <summary>
+
     /// Helper method to find the trailing zero count in a 64-bit integer
-    /// </summary>
+
     private static class BitOperations
     {
         public static int TrailingZeroCount(ulong value)
