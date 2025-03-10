@@ -403,33 +403,97 @@ public class FindMoves
     {
         // Determine what piece is at this position
         ulong positionBit = 1UL << position;
+        bool isWhite = false;
+        PieceType pieceType = PieceType.Pawn;
         
-        if ((bitboard.WhitePawn & positionBit) != 0)
-            return GetPossibleMovesForPiece(position, PieceType.Pawn, true);
-        else if ((bitboard.BlackPawn & positionBit) != 0)
-            return GetPossibleMovesForPiece(position, PieceType.Pawn, false);
-        else if ((bitboard.WhiteKnight & positionBit) != 0)
-            return GetPossibleMovesForPiece(position, PieceType.Knight, true);
-        else if ((bitboard.BlackKnight & positionBit) != 0)
-            return GetPossibleMovesForPiece(position, PieceType.Knight, false);
-        else if ((bitboard.WhiteBishop & positionBit) != 0)
-            return GetPossibleMovesForPiece(position, PieceType.Bishop, true);
-        else if ((bitboard.BlackBishop & positionBit) != 0)
-            return GetPossibleMovesForPiece(position, PieceType.Bishop, false);
-        else if ((bitboard.WhiteRook & positionBit) != 0)
-            return GetPossibleMovesForPiece(position, PieceType.Rook, true);
-        else if ((bitboard.BlackRook & positionBit) != 0)
-            return GetPossibleMovesForPiece(position, PieceType.Rook, false);
-        else if ((bitboard.WhiteQueen & positionBit) != 0)
-            return GetPossibleMovesForPiece(position, PieceType.Queen, true);
-        else if ((bitboard.BlackQueen & positionBit) != 0)
-            return GetPossibleMovesForPiece(position, PieceType.Queen, false);
-        else if ((bitboard.WhiteKing & positionBit) != 0)
-            return GetPossibleMovesForPiece(position, PieceType.King, true);
-        else if ((bitboard.BlackKing & positionBit) != 0)
-            return GetPossibleMovesForPiece(position, PieceType.King, false);
+        // First determine what piece type and color is at this position
+        if ((bitboard.WhitePawn & positionBit) != 0) {
+            pieceType = PieceType.Pawn;
+            isWhite = true;
+        }
+        else if ((bitboard.BlackPawn & positionBit) != 0) {
+            pieceType = PieceType.Pawn;
+            isWhite = false;
+        }
+        else if ((bitboard.WhiteKnight & positionBit) != 0) {
+            pieceType = PieceType.Knight;
+            isWhite = true;
+        }
+        else if ((bitboard.BlackKnight & positionBit) != 0) {
+            pieceType = PieceType.Knight;
+            isWhite = false;
+        }
+        else if ((bitboard.WhiteBishop & positionBit) != 0) {
+            pieceType = PieceType.Bishop;
+            isWhite = true;
+        }
+        else if ((bitboard.BlackBishop & positionBit) != 0) {
+            pieceType = PieceType.Bishop;
+            isWhite = false;
+        }
+        else if ((bitboard.WhiteRook & positionBit) != 0) {
+            pieceType = PieceType.Rook;
+            isWhite = true;
+        }
+        else if ((bitboard.BlackRook & positionBit) != 0) {
+            pieceType = PieceType.Rook;
+            isWhite = false;
+        }
+        else if ((bitboard.WhiteQueen & positionBit) != 0) {
+            pieceType = PieceType.Queen;
+            isWhite = true;
+        }
+        else if ((bitboard.BlackQueen & positionBit) != 0) {
+            pieceType = PieceType.Queen;
+            isWhite = false;
+        }
+        else if ((bitboard.WhiteKing & positionBit) != 0) {
+            pieceType = PieceType.King;
+            isWhite = true;
+        }
+        else if ((bitboard.BlackKing & positionBit) != 0) {
+            pieceType = PieceType.King;
+            isWhite = false;
+        }
         else
             return 0; // No piece at this position
+        
+        // Get pseudo-legal moves
+        ulong pseudoLegalMoves = GetPossibleMovesForPiece(position, pieceType, isWhite);
+        
+        // Now filter out moves that would leave the king in check
+        ulong legalMoves = 0;
+        
+        // Create a temporary Move object to test each move
+        Move previousMove = null; // This won't be used for the test
+        
+        // Check each possible move
+        for (int i = 0; i < 64; i++)
+        {
+            if ((pseudoLegalMoves & (1UL << i)) != 0)
+            {
+                // Try this move
+                Move testMove = new Move(position, i, previousMove, (int)pieceType, isWhite);
+                bitboard.UpdateBitBoard(testMove);
+                
+                // Check if king is in check after this move
+                bool kingInCheck = evaluation.IsInCheck(isWhite, 
+                                                    bitboard.returnWhitePiecesByTypes(), 
+                                                    bitboard.returnBlackPiecesByTypes(), 
+                                                    bitboard.returnAllPieces());
+                
+                // Undo the move
+                bitboard.UndoBitboard();
+                
+                // If this move doesn't leave king in check, it's legal
+                if (!kingInCheck)
+                {
+                    legalMoves |= (1UL << i);
+                }
+            }
+        }
+        
+        return legalMoves;
     }
     private ulong GetPossibleMovesForPiece(int position, PieceType pieceType, bool isWhite)
     {  
