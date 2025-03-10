@@ -7,11 +7,10 @@ public static class BitboardUtils
     // Convert a bitboard index to algebraic notation
     public static string IndexToAlgebraic(int index)
     {
-        int file = index % 8;
-        int rank = index / 8;
+        int file = 7 - (index % 8); // Reverse file calculation
+        int rank = index / 8 + 1;
         char fileChar = (char)('a' + file);
-        int rankNum = rank + 1;
-        return fileChar.ToString() + rankNum.ToString();
+        return fileChar.ToString() + rank.ToString();
     }
     
     // Convert algebraic notation to index
@@ -22,7 +21,7 @@ public static class BitboardUtils
         char fileChar = algebraic[0];
         char rankChar = algebraic[1];
         
-        int file = fileChar - 'a';
+        int file = 7 - (fileChar - 'a'); // Reverse file calculation
         int rank = rankChar - '1';
         
         if (file < 0 || file > 7 || rank < 0 || rank > 7) return -1;

@@ -2,6 +2,14 @@ using System;
 using UnityEngine;
 using System.Collections.Generic;
 public class Bitboard {
+    // Constants for correct bit positions
+    private const int WHITE_KING_START = 3;     // e1
+    private const int BLACK_KING_START = 59;    // e8
+    private const int WHITE_KINGSIDE_ROOK_START = 0;  // h1
+    private const int WHITE_QUEENSIDE_ROOK_START = 7; // a1
+    private const int BLACK_KINGSIDE_ROOK_START = 56; // h8
+    private const int BLACK_QUEENSIDE_ROOK_START = 63; // a8
+
     // Bitboard for white pieces
     public ulong WhitePawn =   0b0000000000000000000000000000000000000000000000001111111100000000;
     public ulong WhiteRook =   0b0000000000000000000000000000000000000000000000000000000010000001;
@@ -102,35 +110,44 @@ public class Bitboard {
         MoveState state = new MoveState();
         ulong sourceMask = 1UL << move.Source;
         ulong destinationMask = 1UL << move.Destination;
+        
+        // Store the current castling flags BEFORE any changes
         state.whiteKingMoved = whiteKingMoved;
         state.blackKingMoved = blackKingMoved;
         state.whiteQueensideRookMoved = whiteQueensideRookMoved;
         state.whiteKingsideRookMoved = whiteKingsideRookMoved;
         state.blackQueensideRookMoved = blackQueensideRookMoved;
         state.blackKingsideRookMoved = blackKingsideRookMoved;
+
         if (move.PieceType == (int)PieceType.King) {
             if (move.IsWhite) {
                 whiteKingMoved = true;
+                //Debug.Log("White king moved");
             } 
             else {
                 blackKingMoved = true;
+                //Debug.Log("Black king moved");
             }
         }
         else if (move.PieceType == (int)PieceType.Rook) {
             if (move.IsWhite) {
-                if (move.Source == 0) { // White rook at a1 (queenside)
+                if (move.Source == WHITE_QUEENSIDE_ROOK_START) { // White rook at a1 (bit 7 in reverse mapping - queenside)
                     whiteQueensideRookMoved = true;
+                    //Debug.Log("White queenside rook moved");
                 } 
-                else if (move.Source == 7) { // White rook at h1 (kingside)
+                else if (move.Source == WHITE_KINGSIDE_ROOK_START) { // White rook at h1 (bit 0 in reverse mapping - kingside)
                     whiteKingsideRookMoved = true;
+                    //Debug.Log("White kingside rook moved");
                 }
             } 
             else {
-                if (move.Source == 56) { // Black rook at a8 (queenside)
+                if (move.Source == BLACK_QUEENSIDE_ROOK_START) { // Black rook at a8 (bit 63 in reverse mapping - queenside)
                     blackQueensideRookMoved = true;
+                    //Debug.Log("Black queenside rook moved");
                 } 
-                else if (move.Source == 63) { // Black rook at h8 (kingside)
+                else if (move.Source == BLACK_KINGSIDE_ROOK_START) { // Black rook at h8 (bit 56 in reverse mapping - kingside)
                     blackKingsideRookMoved = true;
+                    //Debug.Log("Black kingside rook moved");
                 }
             }
         }
@@ -139,18 +156,23 @@ public class Bitboard {
         ulong whitePieceCapture = !move.IsWhite ? destinationMask : 0UL;
         ulong blackPieceCapture = move.IsWhite ? destinationMask : 0UL;
 
-        if ((whitePieceCapture & (1UL << 0)) != 0) { // Capture at a1
+        if ((whitePieceCapture & (1UL << WHITE_QUEENSIDE_ROOK_START)) != 0) { // Capture at a1 (bit 7)
             whiteQueensideRookMoved = true;
+            //Debug.Log("White queenside rook captured");
         }
-        if ((whitePieceCapture & (1UL << 7)) != 0) { // Capture at h1
+        if ((whitePieceCapture & (1UL << WHITE_KINGSIDE_ROOK_START)) != 0) { // Capture at h1 (bit 0)
             whiteKingsideRookMoved = true;
+            //Debug.Log("White kingside rook captured");
         }
-        if ((blackPieceCapture & (1UL << 56)) != 0) { // Capture at a8
+        if ((blackPieceCapture & (1UL << BLACK_QUEENSIDE_ROOK_START)) != 0) { // Capture at a8 (bit 63)
             blackQueensideRookMoved = true;
+            //Debug.Log("Black queenside rook captured");
         }
-        if ((blackPieceCapture & (1UL << 63)) != 0) { // Capture at h8
+        if ((blackPieceCapture & (1UL << BLACK_KINGSIDE_ROOK_START)) != 0) { // Capture at h8 (bit 56)
             blackKingsideRookMoved = true;
+            //Debug.Log("Black kingside rook captured");
         }
+
         // Record any pieces that might be captured at the destination
         // White pieces that might be captured by black
         if (!move.IsWhite) {
@@ -324,6 +346,8 @@ public class Bitboard {
             BlackBishop |= state.capturedPieces[BLACK_BISHOP];
             BlackRook |= state.capturedPieces[BLACK_ROOK];
             BlackQueen |= state.capturedPieces[BLACK_QUEEN];
+
+            // CRITICAL: Properly restore the castling flags to what they were before the move
             whiteKingMoved = state.whiteKingMoved;
             blackKingMoved = state.blackKingMoved;
             whiteQueensideRookMoved = state.whiteQueensideRookMoved;
@@ -331,7 +355,11 @@ public class Bitboard {
             blackQueensideRookMoved = state.blackQueensideRookMoved;
             blackKingsideRookMoved = state.blackKingsideRookMoved;
         }
+        else {
+            Debug.LogWarning("UndoBitboard: moveStack is empty, could not restore castling flags.");
+        }
         
-        previousMove = previousMove.previousMove; //set the previous move to the move before the last move
+        Move oldPreviousMove = previousMove.previousMove;
+        previousMove = oldPreviousMove; //set the previous move to the move before the last move
     }
 }

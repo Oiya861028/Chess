@@ -518,7 +518,7 @@ MonoBehaviour:
   blackKingPrefab: {fileID: 7883252078267185046, guid: 01873dd0b356ec9488f91304ee4869d0, type: 3}
   isAIWhite: 0
   isAIBlack: 1
-  depth: 3
+  depth: 4
 --- !u!4 &1073159062
 Transform:
   m_ObjectHideFlags: 0

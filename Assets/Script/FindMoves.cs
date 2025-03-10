@@ -6,12 +6,15 @@ public class FindMoves
 {
     private Bitboard bitboard;
     private Evaluation evaluation;
-    private const int WHITE_KING_START = 4;
-    private const int BLACK_KING_START = 60;
-    private const int WHITE_KINGSIDE_ROOK_START = 7;
-    private const int WHITE_QUEENSIDE_ROOK_START = 0;
-    private const int BLACK_KINGSIDE_ROOK_START = 63;
-    private const int BLACK_QUEENSIDE_ROOK_START = 56;
+    
+    // Updated constants for the correct bit positions
+    private const int WHITE_KING_START = 3;     // e1
+    private const int BLACK_KING_START = 59;    // e8
+    private const int WHITE_KINGSIDE_ROOK_START = 0;  // h1
+    private const int WHITE_QUEENSIDE_ROOK_START = 7; // a1
+    private const int BLACK_KINGSIDE_ROOK_START = 56; // h8
+    private const int BLACK_QUEENSIDE_ROOK_START = 63; // a8
+    
     // Debug mode to log move generation details
     private bool debugMode = false;
 
@@ -90,9 +93,10 @@ public class FindMoves
         
         if (debugMode) Debug.Log($"Found {legalMoves.Count} legal moves");
         
+        // Check castling moves and add them if legal
         int kingStartPosition = isWhite ? WHITE_KING_START : BLACK_KING_START;
         bool kingMoved = isWhite ? bitboard.whiteKingMoved : bitboard.blackKingMoved;
-        
+
         if (!kingMoved) {
             ulong kingBitboard = isWhite ? bitboard.WhiteKing : bitboard.BlackKing;
             
@@ -101,9 +105,10 @@ public class FindMoves
                 // Check kingside castling
                 bool kingsideRookMoved = isWhite ? bitboard.whiteKingsideRookMoved : bitboard.blackKingsideRookMoved;
                 if (!kingsideRookMoved) {
+                    // Adjusted paths for reversed bit ordering
                     ulong kingsidePath = isWhite ? 
-                                        ((1UL << 5) | (1UL << 6)) : 
-                                        ((1UL << 61) | (1UL << 62));
+                                        ((1UL << 1) | (1UL << 2)) :  // g1,f1 in new mapping
+                                        ((1UL << 57) | (1UL << 58));  // g8,f8 in new mapping
                     
                     if ((bitboard.returnAllPieces() & kingsidePath) == 0) {
                         // Check if king is in check
@@ -113,7 +118,7 @@ public class FindMoves
                                                 bitboard.returnAllPieces())) {
                                                 
                             // Check if king passes through check
-                            int passThroughSquare = isWhite ? 5 : 61; // f1 or f8
+                            int passThroughSquare = isWhite ? 2 : 58; // f1 or f8 in new mapping
                             
                             // Try moving king to pass through square
                             Move passThroughMove = new Move(kingStartPosition, passThroughSquare, previousMove, (int)PieceType.King, isWhite);
@@ -128,7 +133,7 @@ public class FindMoves
                             
                             if (!passThroughCheck) {
                                 // Check destination square
-                                int destSquare = isWhite ? 6 : 62; // g1 or g8
+                                int destSquare = isWhite ? 1 : 57; // g1 or g8 in new mapping
                                 
                                 Move destMove = new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite);
                                 bitboard.UpdateBitBoard(destMove);
@@ -143,6 +148,7 @@ public class FindMoves
                                 if (!destCheck) {
                                     // Add kingside castling move
                                     legalMoves.Add(new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite));
+                                    if (debugMode) Debug.Log($"Added {(isWhite ? "white" : "black")} kingside castling move");
                                 }
                             }
                         }
@@ -152,9 +158,10 @@ public class FindMoves
                 // Check queenside castling
                 bool queensideRookMoved = isWhite ? bitboard.whiteQueensideRookMoved : bitboard.blackQueensideRookMoved;
                 if (!queensideRookMoved) {
+                    // Adjusted paths for reversed bit ordering
                     ulong queensidePath = isWhite ? 
-                                        ((1UL << 1) | (1UL << 2) | (1UL << 3)) : 
-                                        ((1UL << 57) | (1UL << 58) | (1UL << 59));
+                                        ((1UL << 4) | (1UL << 5) | (1UL << 6)) :  // d1,c1,b1 in new mapping
+                                        ((1UL << 60) | (1UL << 61) | (1UL << 62)); // d8,c8,b8 in new mapping
                     
                     if ((bitboard.returnAllPieces() & queensidePath) == 0) {
                         // Check if king is in check
@@ -164,7 +171,7 @@ public class FindMoves
                                                 bitboard.returnAllPieces())) {
                                                 
                             // Check if king passes through check
-                            int passThroughSquare = isWhite ? 3 : 59; // d1 or d8
+                            int passThroughSquare = isWhite ? 4 : 60; // d1 or d8 in new mapping
                             
                             // Try moving king to pass through square
                             Move passThroughMove = new Move(kingStartPosition, passThroughSquare, previousMove, (int)PieceType.King, isWhite);
@@ -179,7 +186,7 @@ public class FindMoves
                             
                             if (!passThroughCheck) {
                                 // Check destination square
-                                int destSquare = isWhite ? 2 : 58; // c1 or c8
+                                int destSquare = isWhite ? 5 : 61; // c1 or c8 in new mapping
                                 
                                 Move destMove = new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite);
                                 bitboard.UpdateBitBoard(destMove);
@@ -194,6 +201,7 @@ public class FindMoves
                                 if (!destCheck) {
                                     // Add queenside castling move
                                     legalMoves.Add(new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite));
+                                    if (debugMode) Debug.Log($"Added {(isWhite ? "white" : "black")} queenside castling move");
                                 }
                             }
                         }
@@ -472,44 +480,48 @@ public class FindMoves
                 return 0;
         }
         
-        // Add castling moves for kings
+        // Add castling moves for kings with the corrected bit positions
         if (pieceType == PieceType.King) {
             // Check if this is a king in its starting position
             if (isWhite && position == WHITE_KING_START && !bitboard.whiteKingMoved) {
                 // White kingside castling
                 if (!bitboard.whiteKingsideRookMoved) {
-                    ulong pathMask = (1UL << 5) | (1UL << 6); // f1, g1
+                    ulong pathMask = (1UL << 1) | (1UL << 2); // g1, f1 in new mapping
                     if ((allPieces & pathMask) == 0) {
                         // Add kingside castling move if path is clear
-                        moves |= 1UL << 6; // g1
+                        moves |= 1UL << 1; // g1 in new mapping
+                        if (debugMode) Debug.Log("Added potential white kingside castling to moveset");
                     }
                 }
                 
                 // White queenside castling
                 if (!bitboard.whiteQueensideRookMoved) {
-                    ulong pathMask = (1UL << 1) | (1UL << 2) | (1UL << 3); // b1, c1, d1
+                    ulong pathMask = (1UL << 4) | (1UL << 5) | (1UL << 6); // d1, c1, b1 in new mapping
                     if ((allPieces & pathMask) == 0) {
                         // Add queenside castling move if path is clear
-                        moves |= 1UL << 2; // c1
+                        moves |= 1UL << 5; // c1 in new mapping
+                        if (debugMode) Debug.Log("Added potential white queenside castling to moveset");
                     }
                 }
             }
             else if (!isWhite && position == BLACK_KING_START && !bitboard.blackKingMoved) {
                 // Black kingside castling
                 if (!bitboard.blackKingsideRookMoved) {
-                    ulong pathMask = (1UL << 61) | (1UL << 62); // f8, g8
+                    ulong pathMask = (1UL << 57) | (1UL << 58); // g8, f8 in new mapping
                     if ((allPieces & pathMask) == 0) {
                         // Add kingside castling move if path is clear
-                        moves |= 1UL << 62; // g8
+                        moves |= 1UL << 57; // g8 in new mapping
+                        if (debugMode) Debug.Log("Added potential black kingside castling to moveset");
                     }
                 }
                 
                 // Black queenside castling
                 if (!bitboard.blackQueensideRookMoved) {
-                    ulong pathMask = (1UL << 57) | (1UL << 58) | (1UL << 59); // b8, c8, d8
+                    ulong pathMask = (1UL << 60) | (1UL << 61) | (1UL << 62); // d8, c8, b8 in new mapping
                     if ((allPieces & pathMask) == 0) {
                         // Add queenside castling move if path is clear
-                        moves |= 1UL << 58; // c8
+                        moves |= 1UL << 61; // c8 in new mapping
+                        if (debugMode) Debug.Log("Added potential black queenside castling to moveset");
                     }
                 }
             }
@@ -833,22 +845,11 @@ public class FindMoves
         
         return moves;
     }
-    
-
-
-
     private string GetSquareName(int position)
     {
-        int rank = position / 8;
-        int file = position % 8;
-        
-        char fileChar = (char)('a' + file);
-        char rankChar = (char)('1' + rank);
-        
-        return $"{fileChar}{rankChar}";
+        return BitboardUtils.IndexToAlgebraic(position);
     }
     
-
     /// Helper method to find the trailing zero count in a 64-bit integer
 
     private static class BitOperations

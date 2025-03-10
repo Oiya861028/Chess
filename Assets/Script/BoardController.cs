@@ -8,12 +8,12 @@ public class BoardController : MonoBehaviour
     public bool debugMode = true;
     //half pli, which I call a move, that precedes the current board state
     Move previousMove;
-    private const int WHITE_KING_START = 4;
-    private const int BLACK_KING_START = 60;
-    private const int WHITE_KINGSIDE_ROOK_START = 7;
-    private const int WHITE_QUEENSIDE_ROOK_START = 0;
-    private const int BLACK_KINGSIDE_ROOK_START = 63;
-    private const int BLACK_QUEENSIDE_ROOK_START = 56;
+    private const int WHITE_KING_START = 3;
+    private const int BLACK_KING_START = 59;
+    private const int WHITE_KINGSIDE_ROOK_START = 0;
+    private const int WHITE_QUEENSIDE_ROOK_START = 7;
+    private const int BLACK_KINGSIDE_ROOK_START = 56;
+    private const int BLACK_QUEENSIDE_ROOK_START = 63;
     //Board Dimensions
     private int squareSize = 1;
     private Vector3 boardOrigin = new Vector3(0f, 0f, 0f);
@@ -930,48 +930,45 @@ public class BoardController : MonoBehaviour
         int rookToIndex = -1;
         
         // White king castling
-        if (movingPieceType == PieceType.King && isWhitePiece && fromIndex == 4) // e1
+        if (movingPieceType == PieceType.King && isWhitePiece && fromIndex == WHITE_KING_START) // e1
         {
-            // Kingside castling
-            if (toIndex == 6) // g1
+            // Kingside castling - king moves from e1(3) to g1(1)
+            if (toIndex == 1) // g1 in bit mapping
             {
                 isCastling = true;
-                rookFromIndex = 7; // h1
-                rookToIndex = 5;   // f1
-                Debug.Log("White kingside castling");
+                rookFromIndex = WHITE_KINGSIDE_ROOK_START; // h1(0)
+                rookToIndex = 2;   // f1(2) in bit mapping
+                Debug.Log("White kingside castling detected");
             }
-            // Queenside castling
-            else if (toIndex == 2) // c1
+            // Queenside castling - king moves from e1(3) to c1(5)
+            else if (toIndex == 5) // c1 in bit mapping
             {
                 isCastling = true;
-                rookFromIndex = 0; // a1
-                rookToIndex = 3;   // d1
-                Debug.Log("White queenside castling");
+                rookFromIndex = WHITE_QUEENSIDE_ROOK_START; // a1(7)
+                rookToIndex = 4;   // d1(4) in bit mapping
+                Debug.Log("White queenside castling detected");
             }
         }
         // Black king castling
-        else if (movingPieceType == PieceType.King && !isWhitePiece && fromIndex == 60) // e8
+        else if (movingPieceType == PieceType.King && !isWhitePiece && fromIndex == BLACK_KING_START) // e8
         {
-            // Kingside castling
-            if (toIndex == 62) // g8
+            // Kingside castling - king moves from e8(59) to g8(57)
+            if (toIndex == 57) // g8 in bit mapping
             {
                 isCastling = true;
-                rookFromIndex = 63; // h8
-                rookToIndex = 61;   // f8
-                Debug.Log("Black kingside castling");
+                rookFromIndex = BLACK_KINGSIDE_ROOK_START; // h8(56)
+                rookToIndex = 58;   // f8(58) in bit mapping
+                Debug.Log("Black kingside castling detected");
             }
-            // Queenside castling
-            else if (toIndex == 58) // c8
+            // Queenside castling - king moves from e8(59) to c8(61)
+            else if (toIndex == 61) // c8 in bit mapping
             {
                 isCastling = true;
-                rookFromIndex = 56; // a8
-                rookToIndex = 59;   // d8
-                Debug.Log("Black queenside castling");
+                rookFromIndex = BLACK_QUEENSIDE_ROOK_START; // a8(63)
+                rookToIndex = 60;   // d8(60) in bit mapping
+                Debug.Log("Black queenside castling detected");
             }
         }
-        
-        // Update castling flags
-        
         
         // Check if there's a piece at the destination (capture)
         GameObject capturedPiece = FindPieceAtPosition(toIndex);
@@ -987,6 +984,7 @@ public class BoardController : MonoBehaviour
         previousMove = move;
 
         Debug.Log($"Creating move: Type={movingPieceType}, IsWhite={isWhitePiece}, From={BitboardUtils.IndexToAlgebraic(fromIndex)}, To={BitboardUtils.IndexToAlgebraic(toIndex)}");
+        
         // Calculate the exact world position for the destination
         Vector3 destinationPosition = GetWorldPositionForBit(toIndex);
         
@@ -1011,19 +1009,20 @@ public class BoardController : MonoBehaviour
         // Handle castling rook movement
         if (isCastling)
         {
-            Debug.Log($"Executing castling move: {(isWhitePiece ? "White" : "Black")} {(toIndex == 6 || toIndex == 62 ? "kingside" : "queenside")}");
+            Debug.Log($"Executing castling move: {(isWhitePiece ? "White" : "Black")} {(toIndex == 1 || toIndex == 57 ? "kingside" : "queenside")}");
             
             // Find the rook object
             GameObject rookObject = FindPieceAtPosition(rookFromIndex);
+            
             if (rookObject != null)
             {
                 Debug.Log($"Found rook at {BitboardUtils.IndexToAlgebraic(rookFromIndex)}");
                 
                 // Move the rook in the bitboard
-                Move rookMove = new Move(rookFromIndex, rookToIndex, null, (int)PieceType.Rook, isWhitePiece);
+                Move rookMove = new Move(rookFromIndex, rookToIndex, previousMove, (int)PieceType.Rook, isWhitePiece);
                 bitboard.UpdateBitBoard(rookMove);
                 
-                // Get the world position for the rook
+                // Get the world position for the rook's destination
                 Vector3 rookDestination = GetWorldPositionForBit(rookToIndex);
                 
                 // Get the correct rook prefab
@@ -1050,7 +1049,7 @@ public class BoardController : MonoBehaviour
                     Debug.Log($"Found rook after verification at {BitboardUtils.IndexToAlgebraic(rookFromIndex)}");
                     
                     // Move the rook in the bitboard
-                    Move rookMove = new Move(rookFromIndex, rookToIndex, null, (int)PieceType.Rook, isWhitePiece);
+                    Move rookMove = new Move(rookFromIndex, rookToIndex, previousMove, (int)PieceType.Rook, isWhitePiece);
                     bitboard.UpdateBitBoard(rookMove);
                     
                     // Get the world position for the rook
@@ -1072,15 +1071,23 @@ public class BoardController : MonoBehaviour
                     // Create the rook at the destination anyway, since we know it should be there
                     Debug.Log($"Creating missing rook at destination {BitboardUtils.IndexToAlgebraic(rookToIndex)}");
                     
-                    // Move the rook in the bitboard
-                    Move rookMove = new Move(rookFromIndex, rookToIndex, null, (int)PieceType.Rook, isWhitePiece);
-                    bitboard.UpdateBitBoard(rookMove);
+                    // Update the bitboard for the rook move
+                    if (isWhitePiece) {
+                        bitboard.WhiteRook &= ~(1UL << rookFromIndex);  // Remove from original position
+                        bitboard.WhiteRook |= (1UL << rookToIndex);     // Add to new position
+                    } else {
+                        bitboard.BlackRook &= ~(1UL << rookFromIndex);  // Remove from original position
+                        bitboard.BlackRook |= (1UL << rookToIndex);     // Add to new position
+                    }
                     
+                    // Create the rook at the destination
                     Vector3 rookDestination = GetWorldPositionForBit(rookToIndex);
                     GameObject rookPrefab = isWhitePiece ? whiteRookPrefab : blackRookPrefab;
                     string rookName = (isWhitePiece ? "White" : "Black") + "Rook_" + rookToIndex;
                     GameObject newRook = Instantiate(rookPrefab, rookDestination, Quaternion.identity, PieceParent);
                     newRook.name = rookName;
+                    
+                    Debug.Log($"Created new rook for castling at {BitboardUtils.IndexToAlgebraic(rookToIndex)}");
                 }
             }
         }
