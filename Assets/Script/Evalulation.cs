@@ -66,8 +66,8 @@ public class Evaluation
     private static readonly ulong QueenSide = FileMasks[0] | FileMasks[1] | FileMasks[2];
     
     // Passed pawn bonuses by rank
-    private static readonly int[] PassedRankMg = { 0, 10, 17, 15, 62, 168, 276 };
-    private static readonly int[] PassedRankEg = { 0, 28, 33, 41, 72, 177, 260 };
+    private static readonly int[] PassedRankMg = { 0, 10, 17, 15, 62, 168, 276, 552 };  // Added value for 8th rank
+    private static readonly int[] PassedRankEg = { 0, 28, 33, 41, 72, 177, 260, 520 };  // Added value for 8th rank
     
     // Other bonuses
     private static readonly int[] RookOnFileMg = { 21, 47 }; // Semi-open, Open
@@ -79,6 +79,8 @@ public class Evaluation
     private static readonly int[] ThreatByRookMg = { 0, 3, 38, 38, 0, 51 };
     private static readonly int[] ThreatByRookEg = { 0, 44, 71, 61, 38, 38 };
     
+    private const int CastlingBonusMg = 50;  // Middlegame bonus for having castled
+    private const int CastlingBonusEg = 0;  
     // Common positional bonuses (middlegame, endgame)
     private const int BishopPawnsMg = 3; private const int BishopPawnsEg = 7;
     private const int CorneredBishopMg = 50; private const int CorneredBishopEg = 50;
@@ -90,6 +92,7 @@ public class Evaluation
     private const int MinorBehindPawnMg = 18; private const int MinorBehindPawnEg = 3;
     private const int OutpostMg = 30; private const int OutpostEg = 21;
     private const int PawnlessFlankMg = 17; private const int PawnlessFlankEg = 95;
+    private const int PawnlessFlankPenaltyMg = 17; private const int PawnlessFlankPenaltyEg = 95; 
     private const int RestrictedPieceMg = 7; private const int RestrictedPieceEg = 7;
     private const int RookOnQueenFileMg = 7; private const int RookOnQueenFileEg = 6;
     private const int SliderOnQueenMg = 59; private const int SliderOnQueenEg = 18;
@@ -102,7 +105,19 @@ public class Evaluation
     // Tempo bonus
     private const int TempoMg = 28;
     private const int TempoEg = 12;
-    
+    private static readonly ulong[] KingFlank = {
+        // Files A-C
+        FileMasks[0] | FileMasks[1] | FileMasks[2],
+        FileMasks[0] | FileMasks[1] | FileMasks[2],
+        FileMasks[0] | FileMasks[1] | FileMasks[2],
+        // Files D-E
+        FileMasks[2] | FileMasks[3] | FileMasks[4],
+        FileMasks[2] | FileMasks[3] | FileMasks[4],
+        // Files F-H
+        FileMasks[5] | FileMasks[6] | FileMasks[7],
+        FileMasks[5] | FileMasks[6] | FileMasks[7],
+        FileMasks[5] | FileMasks[6] | FileMasks[7]
+    };
     // Working data for evaluation
     private ulong[] attackedBy = new ulong[2 * 7]; // [color][piece type]
     private ulong[] attackedBy2 = new ulong[2]; // [color]
@@ -844,13 +859,11 @@ public class Evaluation
                 score.Mg -= Math.Min(kingDanger * kingDanger / 4096, 1000);
             }
         }
-        
-        // Pawnless flank penalty
-        if ((ownPieces[PAWN] & kingFile) == 0)
-        {
-            score.Mg -= PawnlessFlankMg;
-            score.Eg -= PawnlessFlankEg;
-        }
+        if ((ownPieces[PAWN] & KingFlank[kingFile]) == 0)
+            {
+                score.Mg -= PawnlessFlankPenaltyMg;
+                score.Eg -= PawnlessFlankPenaltyEg;
+            }
         
         return score;
     }
@@ -1122,7 +1135,15 @@ public class Evaluation
         int rank1 = sq1 / 8, rank2 = sq2 / 8;
         return Math.Max(Math.Abs(file1 - file2), Math.Abs(rank1 - rank2));
     }
-    
+    private ulong GetKingFlank(int file)
+    {
+        // Kingside (files E-H)
+        if (file >= 4)
+            return FileMasks[5] | FileMasks[6] | FileMasks[7];
+        // Queenside (files A-D)
+        else
+            return FileMasks[0] | FileMasks[1] | FileMasks[2];
+    }
     // For C# in Unity, we'll need this BitOperations class since it's not available by default
     public static class BitOperations
     {
