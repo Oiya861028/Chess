@@ -365,45 +365,64 @@ public class Evaluation
         return new Score(mg, eg);
     }
     public bool IsInCheck(bool isWhite, ulong[] whitePieces, ulong[] blackPieces, ulong allPieces)
-{
-    // Sanity check to prevent array index out of bounds
-    if (whitePieces == null || whitePieces.Length < 7 || blackPieces == null || blackPieces.Length < 7) {
-        Debug.LogError("Invalid piece arrays passed to IsInCheck. Arrays must have at least 7 elements.");
+    {
+        // Sanity check to prevent array index out of bounds
+        if (whitePieces == null || whitePieces.Length < 7 || blackPieces == null || blackPieces.Length < 7) {
+            Debug.LogError("Invalid piece arrays passed to IsInCheck. Arrays must have at least 7 elements.");
+            return false;
+        }
+
+        // Get king square - make sure the king exists
+        ulong kingBitboard = isWhite ? whitePieces[KING] : blackPieces[KING];
+        if (kingBitboard == 0) {
+            Debug.LogError("No king found for " + (isWhite ? "white" : "black") + " in IsInCheck!");
+            return false;
+        }
+
+        int kingSq = BitOperations.TrailingZeroCount(kingBitboard);
+        int enemySide = isWhite ? BLACK : WHITE;
+
+        // Check for pawn attacks
+        if ((PawnAttacks[enemySide * 64 + kingSq] & (isWhite ? blackPieces[PAWN] : whitePieces[PAWN])) != 0)
+            return true;
+
+        // Check for knight attacks
+        if ((KnightAttacks[kingSq] & (isWhite ? blackPieces[KNIGHT] : whitePieces[KNIGHT])) != 0)
+            return true;
+
+        // Check for bishop/queen diagonal attacks
+        ulong bishopAttacks = CalculateBishopAttacks(kingSq, allPieces);
+        if ((bishopAttacks & (isWhite ? (blackPieces[BISHOP] | blackPieces[QUEEN]) : 
+                                    (whitePieces[BISHOP] | whitePieces[QUEEN]))) != 0)
+            return true;
+
+        // Check for rook/queen straight attacks
+        ulong rookAttacks = CalculateRookAttacks(kingSq, allPieces);
+        if ((rookAttacks & (isWhite ? (blackPieces[ROOK] | blackPieces[QUEEN]) : 
+                                    (whitePieces[ROOK] | whitePieces[QUEEN]))) != 0)
+            return true;
+
+        // NEW: Check for adjacent enemy king (kings can never be adjacent to each other)
+        ulong enemyKingBitboard = isWhite ? blackPieces[KING] : whitePieces[KING];
+        if (enemyKingBitboard != 0) {
+            int enemyKingSq = BitOperations.TrailingZeroCount(enemyKingBitboard);
+            
+            // Calculate rank and file differences
+            int kingRank = kingSq / 8;
+            int kingFile = kingSq % 8;
+            int enemyKingRank = enemyKingSq / 8;
+            int enemyKingFile = enemyKingSq % 8;
+            
+            int rankDiff = Math.Abs(kingRank - enemyKingRank);
+            int fileDiff = Math.Abs(kingFile - enemyKingFile);
+            
+            // Kings are adjacent if both rank and file differences are at most 1
+            if (rankDiff <= 1 && fileDiff <= 1)
+                return true;
+        }
+
         return false;
     }
-
-    // Get king square - make sure the king exists
-    ulong kingBitboard = isWhite ? whitePieces[KING] : blackPieces[KING];
-    if (kingBitboard == 0) {
-        Debug.LogError("No king found for " + (isWhite ? "white" : "black") + " in IsInCheck!");
-        return false;
-    }
-
-    int kingSq = BitOperations.TrailingZeroCount(kingBitboard);
-    int enemySide = isWhite ? BLACK : WHITE;
-
-    // Check for pawn attacks
-    if ((PawnAttacks[enemySide * 64 + kingSq] & (isWhite ? blackPieces[PAWN] : whitePieces[PAWN])) != 0)
-        return true;
-
-    // Check for knight attacks
-    if ((KnightAttacks[kingSq] & (isWhite ? blackPieces[KNIGHT] : whitePieces[KNIGHT])) != 0)
-        return true;
-
-    // Check for bishop/queen diagonal attacks
-    ulong bishopAttacks = CalculateBishopAttacks(kingSq, allPieces);
-    if ((bishopAttacks & (isWhite ? (blackPieces[BISHOP] | blackPieces[QUEEN]) : 
-                                   (whitePieces[BISHOP] | whitePieces[QUEEN]))) != 0)
-        return true;
-
-    // Check for rook/queen straight attacks
-    ulong rookAttacks = CalculateRookAttacks(kingSq, allPieces);
-    if ((rookAttacks & (isWhite ? (blackPieces[ROOK] | blackPieces[QUEEN]) : 
-                                 (whitePieces[ROOK] | whitePieces[QUEEN]))) != 0)
-        return true;
-
-    return false;
-}
     // Main evaluation function
     public int EvaluatePosition(
         ulong whitePawn, ulong whiteKnight, ulong whiteBishop, ulong whiteRook, ulong whiteQueen, ulong whiteKing,

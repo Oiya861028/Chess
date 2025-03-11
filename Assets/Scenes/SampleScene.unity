@@ -516,12 +516,12 @@ MonoBehaviour:
   blackBishopPrefab: {fileID: 9003803962016267591, guid: c1eb4a3869d6aa540bc4370a87753082, type: 3}
   blackQueenPrefab: {fileID: 4221686025490629932, guid: 447a2470ec8c6e740be07c17f3427469, type: 3}
   blackKingPrefab: {fileID: 7883252078267185046, guid: 01873dd0b356ec9488f91304ee4869d0, type: 3}
-  gameMode: 2
+  gameMode: 0
   isAIWhite: 1
-  isAIBlack: 1
+  isAIBlack: 0
   whiteAIDepth: 3
   blackAIDepth: 3
-  aiMoveDelay: 0.5
+  aiMoveDelay: 0.25
 --- !u!4 &1073159062
 Transform:
   m_ObjectHideFlags: 0

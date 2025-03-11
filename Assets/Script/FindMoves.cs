@@ -29,7 +29,12 @@ public class FindMoves
     public void SetPreviousMove(Move move)
     {
         previousMove = move;
+        if (debugMode && move != null)
+        {
+            Debug.Log($"Previous move set to: {BitboardUtils.IndexToAlgebraic(move.Source)} to {BitboardUtils.IndexToAlgebraic(move.Destination)}, IsPawnDoubleMove: {move.IsPawnDoubleMove}");
+        }
     }
+
     /// Gets all legal moves for the specified side
 
     public List<Move> GetAllPossibleMoves(bool isWhite, Move previousMove)
@@ -700,28 +705,26 @@ public class FindMoves
                     moves |= 1UL << (position + 9);
                 }
                 
-                // En passant captures
-                if (rank == 4) // White pawns can en passant on rank 5 (index 4)
+                // En passant captures - only on rank 5 (index 4) for white pawns
+                if (rank == 4 && previousMove != null && 
+                    previousMove.PieceType == (int)PieceType.Pawn && 
+                    !previousMove.IsWhite && 
+                    previousMove.IsPawnDoubleMove)
                 {
-                    // Check if previous move was a black pawn double move
-                    if (previousMove != null && 
-                        previousMove.PieceType == (int)PieceType.Pawn && 
-                        !previousMove.IsWhite &&
-                        previousMove.IsPawnDoubleMove)
+                    int enPassantFile = previousMove.Destination % 8;
+                    
+                    // Check if our pawn is adjacent to the double-moved pawn
+                    if (file > 0 && enPassantFile == file - 1)
                     {
-                        int prevDestFile = previousMove.Destination % 8;
-                        
-                        // Check if the enemy pawn landed adjacent to our pawn
-                        if (prevDestFile == file - 1 && previousMove.Destination == position - 1)
-                        {
-                            // En passant to the left
-                            moves |= 1UL << (position + 7);
-                        }
-                        else if (prevDestFile == file + 1 && previousMove.Destination == position + 1)
-                        {
-                            // En passant to the right
-                            moves |= 1UL << (position + 9);
-                        }
+                        // En passant capture to the left
+                        moves |= 1UL << (position + 7);
+                        if (debugMode) Debug.Log($"White pawn at {BitboardUtils.IndexToAlgebraic(position)} can en passant capture to {BitboardUtils.IndexToAlgebraic(position + 7)}");
+                    }
+                    if (file < 7 && enPassantFile == file + 1)
+                    {
+                        // En passant capture to the right
+                        moves |= 1UL << (position + 9);
+                        if (debugMode) Debug.Log($"White pawn at {BitboardUtils.IndexToAlgebraic(position)} can en passant capture to {BitboardUtils.IndexToAlgebraic(position + 9)}");
                     }
                 }
             }
@@ -743,40 +746,38 @@ public class FindMoves
             // Capture moves
             if (rank > 0)
             {
-                // Capture to the left
+                // Capture to the left (file perspective: right to left)
                 if (file < 7 && ((enemyPieces & (1UL << (position - 7))) != 0))
                 {
                     moves |= 1UL << (position - 7);
                 }
                 
-                // Capture to the right
+                // Capture to the right (file perspective: left to right)
                 if (file > 0 && ((enemyPieces & (1UL << (position - 9))) != 0))
                 {
                     moves |= 1UL << (position - 9);
                 }
                 
-                // En passant captures
-                if (rank == 3) // Black pawns can en passant on rank 4 (index 3)
+                // En passant captures - only on rank 4 (index 3) for black pawns
+                if (rank == 3 && previousMove != null && 
+                    previousMove.PieceType == (int)PieceType.Pawn && 
+                    previousMove.IsWhite && 
+                    previousMove.IsPawnDoubleMove)
                 {
-                    // Check if previous move was a white pawn double move
-                    if (previousMove != null && 
-                        previousMove.PieceType == (int)PieceType.Pawn && 
-                        previousMove.IsWhite &&
-                        previousMove.IsPawnDoubleMove)
+                    int enPassantFile = previousMove.Destination % 8;
+                    
+                    // Check if our pawn is adjacent to the double-moved pawn
+                    if (file < 7 && enPassantFile == file + 1)
                     {
-                        int prevDestFile = previousMove.Destination % 8;
-                        
-                        // Check if the enemy pawn landed adjacent to our pawn
-                        if (prevDestFile == file - 1 && previousMove.Destination == position - 1)
-                        {
-                            // En passant to the left
-                            moves |= 1UL << (position - 7);
-                        }
-                        else if (prevDestFile == file + 1 && previousMove.Destination == position + 1)
-                        {
-                            // En passant to the right
-                            moves |= 1UL << (position - 9);
-                        }
+                        // En passant capture to the left (file perspective: right to left)
+                        moves |= 1UL << (position - 7);
+                        if (debugMode) Debug.Log($"Black pawn at {BitboardUtils.IndexToAlgebraic(position)} can en passant capture to {BitboardUtils.IndexToAlgebraic(position - 7)}");
+                    }
+                    if (file > 0 && enPassantFile == file - 1)
+                    {
+                        // En passant capture to the right (file perspective: left to right)
+                        moves |= 1UL << (position - 9);
+                        if (debugMode) Debug.Log($"Black pawn at {BitboardUtils.IndexToAlgebraic(position)} can en passant capture to {BitboardUtils.IndexToAlgebraic(position - 9)}");
                     }
                 }
             }

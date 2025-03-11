@@ -72,7 +72,7 @@ public class BoardController : MonoBehaviour
         previousMove = null;
         evaluation = new Evaluation(); // Initialize the evaluation object
         findMoves = new FindMoves(bitboard);
-        
+        findMoves.SetPreviousMove(previousMove);
         //Instantiate All Pieces on Board   
         InstantiateBoard();
         InstantiatePieces();
@@ -936,6 +936,8 @@ public class BoardController : MonoBehaviour
         
         // Check for en passant
         bool isEnPassant = false;
+        int capturedPawnIndex = -1;
+
         if (movingPieceType == PieceType.Pawn && 
             Math.Abs(fromIndex % 8 - toIndex % 8) == 1 && // Diagonal move
             (bitboard.returnAllPieces() & (1UL << toIndex)) == 0) // Empty destination
@@ -943,7 +945,8 @@ public class BoardController : MonoBehaviour
             // Check if the previous move was a pawn double move
             if (previousMove != null && 
                 previousMove.PieceType == (int)PieceType.Pawn && 
-                Math.Abs(previousMove.Source - previousMove.Destination) == 16)
+                previousMove.IsPawnDoubleMove &&
+                previousMove.IsWhite != isWhitePiece)
             {
                 int prevDestFile = previousMove.Destination % 8;
                 int targetFile = toIndex % 8;
@@ -951,12 +954,41 @@ public class BoardController : MonoBehaviour
                 if (prevDestFile == targetFile)
                 {
                     isEnPassant = true;
-                    int capturedPawnIndex = isWhitePiece ? toIndex - 8 : toIndex + 8;
+                    // Calculate the position of the captured pawn
+                    capturedPawnIndex = previousMove.Destination;
+                    
+                    Debug.Log($"En passant: Trying to capture pawn at {BitboardUtils.IndexToAlgebraic(capturedPawnIndex)}");
+                    
+                    // Find and destroy the captured pawn
                     GameObject capturedPawn = FindPieceAtPosition(capturedPawnIndex);
                     if (capturedPawn != null)
                     {
-                        Debug.Log($"En passant: Capturing pawn at {BitboardUtils.IndexToAlgebraic(capturedPawnIndex)}");
+                        Debug.Log($"En passant: Successfully captured pawn {capturedPawn.name} at {BitboardUtils.IndexToAlgebraic(capturedPawnIndex)}");
                         DestroyImmediate(capturedPawn);
+                        
+                        // Also update the bitboard to remove the captured pawn
+                        if (isWhitePiece)
+                        {
+                            // White captures black
+                            bitboard.BlackPawn &= ~(1UL << capturedPawnIndex);
+                        }
+                        else
+                        {
+                            // Black captures white
+                            bitboard.WhitePawn &= ~(1UL << capturedPawnIndex);
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogError($"En passant: Could not find pawn at {BitboardUtils.IndexToAlgebraic(capturedPawnIndex)}");
+                        // Verify what pieces are at this location
+                        ulong mask = 1UL << capturedPawnIndex;
+                        if ((bitboard.WhitePawn & mask) != 0) Debug.Log("White pawn found in bitboard");
+                        if ((bitboard.BlackPawn & mask) != 0) Debug.Log("Black pawn found in bitboard");
+                        
+                        // Force removal from bitboard even if GameObject not found
+                        bitboard.WhitePawn &= ~mask;
+                        bitboard.BlackPawn &= ~mask;
                     }
                 }
             }
@@ -977,7 +1009,7 @@ public class BoardController : MonoBehaviour
         Move move = new Move(fromIndex, toIndex, previousMove, (int)movingPieceType, isWhitePiece, isEnPassant, isPawnDoubleMove);
         bitboard.UpdateBitBoard(move);
         previousMove = move;
-
+        findMoves.SetPreviousMove(previousMove);
         Debug.Log($"Creating move: Type={movingPieceType}, IsWhite={isWhitePiece}, From={BitboardUtils.IndexToAlgebraic(fromIndex)}, To={BitboardUtils.IndexToAlgebraic(toIndex)}");
         
         // Calculate the exact world position for the destination
