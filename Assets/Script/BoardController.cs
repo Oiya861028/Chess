@@ -59,8 +59,8 @@ public class BoardController : MonoBehaviour
     [Header("AI Settings")]
     public bool isAIWhite = false;  // You already have this
     public bool isAIBlack = true;   // You already have this
-    public int whiteAIDepth = 3;    // Depth for white AI
-    public int blackAIDepth = 3;    // Depth for black AI
+    public int whiteAIDepth = 4;    // Depth for white AI
+    public int blackAIDepth = 4;    // Depth for black AI
     public float aiMoveDelay = 0.5f; // Time in seconds to wait between AI moves in AI vs AI mode
     private float aiMoveTimer = 0f;  // Timer for AI vs AI moves
 
@@ -76,8 +76,8 @@ public class BoardController : MonoBehaviour
         InstantiatePieces();
         
         // Print the initial board layout for debugging
-        Debug.Log("Initial board setup:");
-        DebugPrintBoard();
+        //Debug.Log("Initial board setup:");
+        //DebugPrintBoard();
 
         //Instantiate the AI
         AI = new StockFridge(findMoves, bitboard);
@@ -119,84 +119,7 @@ public class BoardController : MonoBehaviour
     Debug.Log("  a b c d e f g h");
     Debug.Log("--------------------------------------");
     }
-    private bool IsMoveLegal(int fromIndex, int toIndex)
-    {
-        if (!debugMode) return true;
-        
-        // Check if the source square has a piece
-        ulong sourceMask = 1UL << fromIndex;
-        bool isWhitePiece = 
-            (bitboard.WhitePawn & sourceMask) != 0 ||
-            (bitboard.WhiteRook & sourceMask) != 0 ||
-            (bitboard.WhiteKnight & sourceMask) != 0 ||
-            (bitboard.WhiteBishop & sourceMask) != 0 ||
-            (bitboard.WhiteQueen & sourceMask) != 0 ||
-            (bitboard.WhiteKing & sourceMask) != 0;
-        
-        bool isBlackPiece = 
-            (bitboard.BlackPawn & sourceMask) != 0 ||
-            (bitboard.BlackRook & sourceMask) != 0 ||
-            (bitboard.BlackKnight & sourceMask) != 0 ||
-            (bitboard.BlackBishop & sourceMask) != 0 ||
-            (bitboard.BlackQueen & sourceMask) != 0 ||
-            (bitboard.BlackKing & sourceMask) != 0;
-        
-        if (!isWhitePiece && !isBlackPiece)
-        {
-            Debug.LogError($"No piece at source square {BitboardUtils.IndexToAlgebraic(fromIndex)}");
-            return false;
-        }
-        
-        // Check if the destination is a valid move
-        ulong possibleMoves = findMoves.GetPossibleMoves(fromIndex);
-        bool isValidMove = (possibleMoves & (1UL << toIndex)) != 0;
-        
-        if (!isValidMove)
-        {
-            Debug.LogError($"Invalid move from {BitboardUtils.IndexToAlgebraic(fromIndex)} to {BitboardUtils.IndexToAlgebraic(toIndex)}");
-            return false;
-        }
-        
-        // Check if the move would leave the king in check
-        // First determine piece type
-        PieceType pieceType = PieceType.Pawn; // Default
-        if ((bitboard.WhitePawn & sourceMask) != 0 || (bitboard.BlackPawn & sourceMask) != 0)
-            pieceType = PieceType.Pawn;
-        else if ((bitboard.WhiteRook & sourceMask) != 0 || (bitboard.BlackRook & sourceMask) != 0)
-            pieceType = PieceType.Rook;
-        else if ((bitboard.WhiteKnight & sourceMask) != 0 || (bitboard.BlackKnight & sourceMask) != 0)
-            pieceType = PieceType.Knight;
-        else if ((bitboard.WhiteBishop & sourceMask) != 0 || (bitboard.BlackBishop & sourceMask) != 0)
-            pieceType = PieceType.Bishop;
-        else if ((bitboard.WhiteQueen & sourceMask) != 0 || (bitboard.BlackQueen & sourceMask) != 0)
-            pieceType = PieceType.Queen;
-        else if ((bitboard.WhiteKing & sourceMask) != 0 || (bitboard.BlackKing & sourceMask) != 0)
-            pieceType = PieceType.King;
-        
-        // Create a move object
-        Move move = new Move(fromIndex, toIndex, previousMove, (int)pieceType, isWhitePiece);
-        
-        // Make the move
-        bitboard.UpdateBitBoard(move);
-        
-        // Check if the king is in check
-        ulong[] whitePieces = bitboard.returnWhitePiecesByTypes();
-        ulong[] blackPieces = bitboard.returnBlackPiecesByTypes();
-        ulong allPieces = bitboard.returnAllPieces();
-        
-        bool kingInCheck = evaluation.IsInCheck(isWhitePiece, whitePieces, blackPieces, allPieces);
-        
-        // Undo the move
-        bitboard.UndoBitboard();
-        
-        if (kingInCheck)
-        {
-            Debug.LogError($"Move would leave king in check: {BitboardUtils.IndexToAlgebraic(fromIndex)} to {BitboardUtils.IndexToAlgebraic(toIndex)}");
-            return false;
-        }
-        
-        return true;
-    }
+    
     private bool aiIsThinking = false;
 
     void Update()
