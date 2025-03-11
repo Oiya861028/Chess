@@ -53,22 +53,18 @@ public class BoardController : MonoBehaviour
     
     //AI
     private StockFridge AI;
-<<<<<<< HEAD
+    
+    // Game mode settings
     public enum GameMode { HumanVsAI, HumanVsHuman, AIVsAI }
     public GameMode gameMode = GameMode.HumanVsAI;
 
     [Header("AI Settings")]
-    public bool isAIWhite = false;  // You already have this
-    public bool isAIBlack = true;   // You already have this
+    public bool isAIWhite = false;  
+    public bool isAIBlack = true;   
     public int whiteAIDepth = 4;    // Depth for white AI
     public int blackAIDepth = 4;    // Depth for black AI
     public float aiMoveDelay = 0.5f; // Time in seconds to wait between AI moves in AI vs AI mode
     private float aiMoveTimer = 0f;  // Timer for AI vs AI moves
-=======
-    public bool isAIWhite = false;
-    public bool isAIBlack = true;
-    public int depth = 3;
->>>>>>> b533f64e455e220ad4c9586cb90b888875e9e3d9
 
     void Start()
     {
@@ -141,17 +137,50 @@ public class BoardController : MonoBehaviour
             Debug.Log("Checkmate! White wins!");
         }
         
-        // Rest of Update method
-        if (Input.GetMouseButtonDown(0) && isWhiteTurn)
+        switch (gameMode)
         {
-            HandleClick();
-        }
-        else if (!isWhiteTurn && !aiIsThinking)
-        {
-            aiIsThinking = true;
-            MakeAIMove();
+            case GameMode.HumanVsHuman:
+                // Both players are human, just handle clicks
+                if (Input.GetMouseButtonDown(0))
+                {
+                    HandleClick();
+                }
+                break;
+                
+            case GameMode.HumanVsAI:
+                // Human vs AI mode
+                if ((isWhiteTurn && !isAIWhite) || (!isWhiteTurn && !isAIBlack))
+                {
+                    // Human's turn
+                    if (Input.GetMouseButtonDown(0))
+                    {
+                        HandleClick();
+                    }
+                }
+                else if (!aiIsThinking)
+                {
+                    // AI's turn
+                    aiIsThinking = true;
+                    MakeAIMove();
+                }
+                break;
+                
+            case GameMode.AIVsAI:
+                // AI vs AI mode, use a timer to pace the moves
+                if (!aiIsThinking)
+                {
+                    aiMoveTimer += Time.deltaTime;
+                    if (aiMoveTimer >= aiMoveDelay)
+                    {
+                        aiMoveTimer = 0f;
+                        aiIsThinking = true;
+                        MakeAIMove();
+                    }
+                }
+                break;
         }
     }
+    
     private bool IsPiecePinned(int pieceIndex, bool isWhite)
     {
         // Find the king
@@ -307,6 +336,7 @@ public class BoardController : MonoBehaviour
         
         return false;
     }
+    
     private void MakeAIMove()
     {
         try
@@ -321,16 +351,16 @@ public class BoardController : MonoBehaviour
             VerifyBoardState();
             
             // Get the best move from StockFridge
-    
-            Move aiMove = AI.GetBestMove(depth, false, previousMove);
+            int currentDepth = isWhiteTurn ? whiteAIDepth : blackAIDepth;
+            Move aiMove = AI.GetBestMove(currentDepth, isWhiteTurn, previousMove);
             
             if (aiMove != null)
             {
-                // Double check the AI is playing as black
-                if (aiMove.IsWhite)
+                // Double check the AI is playing the correct color
+                if (aiMove.IsWhite != isWhiteTurn)
                 {
-                    Debug.LogError("AI returned a white piece move but should be playing as black");
-                    isWhiteTurn = true;
+                    Debug.LogError("AI returned a " + (aiMove.IsWhite ? "white" : "black") + 
+                                " piece move but should be playing as " + (isWhiteTurn ? "white" : "black"));
                     aiIsThinking = false;
                     return;
                 }
@@ -339,10 +369,11 @@ public class BoardController : MonoBehaviour
                 selectedPiece = FindPieceAtPosition(aiMove.Source);
                 if (selectedPiece != null)
                 {
-                    // Verify the piece is actually black
-                    if (!selectedPiece.name.StartsWith("Black"))
+                    // Verify the piece is the right color
+                    bool isPieceWhite = selectedPiece.name.StartsWith("White");
+                    if (isPieceWhite != isWhiteTurn)
                     {
-                        Debug.LogError("AI tried to move a white piece: " + selectedPiece.name);
+                        Debug.LogError("AI tried to move the wrong color piece: " + selectedPiece.name);
                         Debug.LogError("Move source: " + BitboardUtils.IndexToAlgebraic(aiMove.Source) + 
                                     ", destination: " + BitboardUtils.IndexToAlgebraic(aiMove.Destination) +
                                     ", piece type: " + aiMove.PieceType + 
@@ -351,14 +382,13 @@ public class BoardController : MonoBehaviour
                         // Fix the inconsistency - update the bitboard
                         VerifyBoardState();
                         
-                        isWhiteTurn = true;
                         aiIsThinking = false;
                         return;
                     }
                     
                     selectedPieceIndex = aiMove.Source;
                     selectedPieceType = (PieceType)aiMove.PieceType;
-                    selectedPieceIsWhite = false;
+                    selectedPieceIsWhite = isPieceWhite;
 
                     // Display the move visually before making it
                     EraseHighlights();
@@ -372,7 +402,7 @@ public class BoardController : MonoBehaviour
                     selectedPiece = null;
                     selectedPieceIndex = -1;
                     possibleMoves = 0;
-                    isWhiteTurn = true;
+                    isWhiteTurn = !isWhiteTurn;
                     
                     Debug.Log("AI moved from " + BitboardUtils.IndexToAlgebraic(aiMove.Source) + 
                             " to " + BitboardUtils.IndexToAlgebraic(aiMove.Destination));
@@ -391,7 +421,6 @@ public class BoardController : MonoBehaviour
                     // Try to fix the inconsistency
                     VerifyBoardState();
                     
-                    isWhiteTurn = true;
                     aiIsThinking = false;
                 }
                 previousMove = aiMove;
@@ -400,26 +429,24 @@ public class BoardController : MonoBehaviour
             {
                 Debug.LogError("AI couldn't find a valid move!");
                 // Check if in checkmate or stalemate
-                bool inCheck = evaluation.IsInCheck(false, 
+                bool inCheck = evaluation.IsInCheck(isWhiteTurn, 
                                                 bitboard.returnWhitePiecesByTypes(), 
                                                 bitboard.returnBlackPiecesByTypes(), 
                                                 bitboard.returnAllPieces());
                 if (inCheck)
                 {
-                    Debug.Log("Checkmate - White wins!");
+                    Debug.Log("Checkmate - " + (isWhiteTurn ? "Black" : "White") + " wins!");
                 }
                 else
                 {
                     Debug.Log("Stalemate - Draw!");
                 }
-                isWhiteTurn = true;
                 aiIsThinking = false;
             }
         }
         catch (Exception e)
         {
             Debug.LogError("Error in AI move: " + e.Message + "\n" + e.StackTrace);
-            isWhiteTurn = true;
             aiIsThinking = false;
         }
         finally
