@@ -888,6 +888,20 @@ public class BoardController : MonoBehaviour
         PieceType movingPieceType = selectedPieceType;
         bool isWhitePiece = selectedPieceIsWhite;
         
+        // Check for pawn promotion
+        bool isPromotion = false;
+        int promotionPieceType = (int)PieceType.Queen; // Default to Queen
+
+        if (movingPieceType == PieceType.Pawn)
+        {
+            int destRank = toIndex / 8;
+            if ((isWhitePiece && destRank == 7) || (!isWhitePiece && destRank == 0))
+            {
+                isPromotion = true;
+                Debug.Log($"Pawn promotion detected from {BitboardUtils.IndexToAlgebraic(fromIndex)} to {BitboardUtils.IndexToAlgebraic(toIndex)}");
+            }
+        }
+        
         // Check for castling moves
         bool isCastling = false;
         int rookFromIndex = -1;
@@ -936,8 +950,7 @@ public class BoardController : MonoBehaviour
         
         // Check for en passant
         bool isEnPassant = false;
-        int capturedPawnIndex = -1;
-
+        
         if (movingPieceType == PieceType.Pawn && 
             Math.Abs(fromIndex % 8 - toIndex % 8) == 1 && // Diagonal move
             (bitboard.returnAllPieces() & (1UL << toIndex)) == 0) // Empty destination
@@ -955,7 +968,7 @@ public class BoardController : MonoBehaviour
                 {
                     isEnPassant = true;
                     // Calculate the position of the captured pawn
-                    capturedPawnIndex = previousMove.Destination;
+                    int capturedPawnIndex = previousMove.Destination;
                     
                     Debug.Log($"En passant: Trying to capture pawn at {BitboardUtils.IndexToAlgebraic(capturedPawnIndex)}");
                     
@@ -994,9 +1007,6 @@ public class BoardController : MonoBehaviour
             }
         }
         
-        // Check for double pawn move
-        bool isPawnDoubleMove = movingPieceType == PieceType.Pawn && Math.Abs(fromIndex - toIndex) == 16;
-        
         // Check if there's a piece at the destination (normal capture)
         GameObject capturedPiece = FindPieceAtPosition(toIndex);
         if (capturedPiece != null)
@@ -1005,32 +1015,56 @@ public class BoardController : MonoBehaviour
             DestroyImmediate(capturedPiece);
         }
         
+        // Check for double pawn move
+        bool isPawnDoubleMove = movingPieceType == PieceType.Pawn && Math.Abs(fromIndex - toIndex) == 16;
+        
         // Move the piece in the bitboard
-        Move move = new Move(fromIndex, toIndex, previousMove, (int)movingPieceType, isWhitePiece, isEnPassant, isPawnDoubleMove);
+        Move move = new Move(fromIndex, toIndex, previousMove, (int)movingPieceType, isWhitePiece, 
+                            isEnPassant, isPawnDoubleMove, isPromotion, promotionPieceType);
         bitboard.UpdateBitBoard(move);
         previousMove = move;
         findMoves.SetPreviousMove(previousMove);
-        Debug.Log($"Creating move: Type={movingPieceType}, IsWhite={isWhitePiece}, From={BitboardUtils.IndexToAlgebraic(fromIndex)}, To={BitboardUtils.IndexToAlgebraic(toIndex)}");
+
+        Debug.Log($"Creating move: Type={movingPieceType}, IsWhite={isWhitePiece}, " +
+                $"From={BitboardUtils.IndexToAlgebraic(fromIndex)}, To={BitboardUtils.IndexToAlgebraic(toIndex)}, " +
+                $"IsEnPassant={isEnPassant}, IsPawnDoubleMove={isPawnDoubleMove}, IsPromotion={isPromotion}");
         
         // Calculate the exact world position for the destination
         Vector3 destinationPosition = GetWorldPositionForBit(toIndex);
+
+        // Destroy the old piece GameObject
+        DestroyImmediate(selectedPiece);
         
-        // Get the correct prefab based on piece type and color
-        GameObject prefabToUse = GetPrefabForPiece(movingPieceType, isWhitePiece);
-        
-        if (prefabToUse != null)
+        // Handle visual piece creation
+        if (isPromotion)
         {
-            // Destroy the old piece GameObject
-            DestroyImmediate(selectedPiece);
+            // For promotion, use the Queen prefab
+            GameObject prefabToUse = isWhitePiece ? whiteQueenPrefab : blackQueenPrefab;
             
-            // Create a new piece GameObject at the destination
-            string pieceName = (isWhitePiece ? "White" : "Black") + 
-                            GetPieceTypeName(movingPieceType) + "_" + toIndex;
+            // The piece name should now be Queen instead of Pawn
+            string pieceName = (isWhitePiece ? "White" : "Black") + "Queen_" + toIndex;
             
             GameObject newPiece = Instantiate(prefabToUse, destinationPosition, Quaternion.identity, PieceParent);
             newPiece.name = pieceName;
             
-            Debug.Log("Created new piece: " + newPiece.name + " at " + BitboardUtils.IndexToAlgebraic(toIndex));
+            Debug.Log("Created promoted queen: " + newPiece.name + " at " + BitboardUtils.IndexToAlgebraic(toIndex));
+        }
+        else
+        {
+            // Normal move - use the original piece type
+            GameObject prefabToUse = GetPrefabForPiece(movingPieceType, isWhitePiece);
+            
+            if (prefabToUse != null)
+            {
+                // Create a new piece GameObject at the destination
+                string pieceName = (isWhitePiece ? "White" : "Black") + 
+                                GetPieceTypeName(movingPieceType) + "_" + toIndex;
+                
+                GameObject newPiece = Instantiate(prefabToUse, destinationPosition, Quaternion.identity, PieceParent);
+                newPiece.name = pieceName;
+                
+                Debug.Log("Created new piece: " + newPiece.name + " at " + BitboardUtils.IndexToAlgebraic(toIndex));
+            }
         }
         
         // Handle castling rook movement

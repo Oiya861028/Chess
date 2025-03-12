@@ -122,32 +122,26 @@ public class Bitboard {
         if (move.PieceType == (int)PieceType.King) {
             if (move.IsWhite) {
                 whiteKingMoved = true;
-                //Debug.Log("White king moved");
             } 
             else {
                 blackKingMoved = true;
-                //Debug.Log("Black king moved");
             }
         }
         else if (move.PieceType == (int)PieceType.Rook) {
             if (move.IsWhite) {
                 if (move.Source == WHITE_QUEENSIDE_ROOK_START) { // White rook at a1 (bit 7 in reverse mapping - queenside)
                     whiteQueensideRookMoved = true;
-                    //Debug.Log("White queenside rook moved");
                 } 
                 else if (move.Source == WHITE_KINGSIDE_ROOK_START) { // White rook at h1 (bit 0 in reverse mapping - kingside)
                     whiteKingsideRookMoved = true;
-                    //Debug.Log("White kingside rook moved");
                 }
             } 
             else {
                 if (move.Source == BLACK_QUEENSIDE_ROOK_START) { // Black rook at a8 (bit 63 in reverse mapping - queenside)
                     blackQueensideRookMoved = true;
-                    //Debug.Log("Black queenside rook moved");
                 } 
                 else if (move.Source == BLACK_KINGSIDE_ROOK_START) { // Black rook at h8 (bit 56 in reverse mapping - kingside)
                     blackKingsideRookMoved = true;
-                    //Debug.Log("Black kingside rook moved");
                 }
             }
         }
@@ -158,19 +152,15 @@ public class Bitboard {
 
         if ((whitePieceCapture & (1UL << WHITE_QUEENSIDE_ROOK_START)) != 0) { // Capture at a1 (bit 7)
             whiteQueensideRookMoved = true;
-            //Debug.Log("White queenside rook captured");
         }
         if ((whitePieceCapture & (1UL << WHITE_KINGSIDE_ROOK_START)) != 0) { // Capture at h1 (bit 0)
             whiteKingsideRookMoved = true;
-            //Debug.Log("White kingside rook captured");
         }
         if ((blackPieceCapture & (1UL << BLACK_QUEENSIDE_ROOK_START)) != 0) { // Capture at a8 (bit 63)
             blackQueensideRookMoved = true;
-            //Debug.Log("Black queenside rook captured");
         }
         if ((blackPieceCapture & (1UL << BLACK_KINGSIDE_ROOK_START)) != 0) { // Capture at h8 (bit 56)
             blackKingsideRookMoved = true;
-            //Debug.Log("Black kingside rook captured");
         }
 
         // Record any pieces that might be captured at the destination
@@ -235,33 +225,49 @@ public class Bitboard {
                 break;
         }
 
-        // Place the piece at the destination position
-        switch (move.PieceType) {
-            case (int) PieceType.Pawn:
-                if (move.IsWhite) WhitePawn |= destinationMask;
-                else BlackPawn |= destinationMask;
-                break;
-            case (int) PieceType.Rook:
-                if (move.IsWhite) WhiteRook |= destinationMask;
-                else BlackRook |= destinationMask;
-                break;
-            case (int) PieceType.Knight:
-                if (move.IsWhite) WhiteKnight |= destinationMask;
-                else BlackKnight |= destinationMask;
-                break;
-            case (int) PieceType.Bishop:
-                if (move.IsWhite) WhiteBishop |= destinationMask;
-                else BlackBishop |= destinationMask;
-                break;
-            case (int) PieceType.Queen:
-                if (move.IsWhite) WhiteQueen |= destinationMask;
-                else BlackQueen |= destinationMask;
-                break;
-            case (int) PieceType.King:
-                if (move.IsWhite) WhiteKing |= destinationMask;
-                else BlackKing |= destinationMask;
-                break;
+        // Handle pawn promotion - determine destination piece type
+        if (move.IsPromotion)
+        {
+            // For now, we always promote to queen
+            if (move.IsWhite)
+                WhiteQueen |= destinationMask;
+            else
+                BlackQueen |= destinationMask;
+                
+            // Debug output for promotion
+            Debug.Log($"Pawn promoted to Queen at {BitboardUtils.IndexToAlgebraic(move.Destination)}");
         }
+        else
+        {
+            // Place the piece at the destination position (normal move)
+            switch (move.PieceType) {
+                case (int) PieceType.Pawn:
+                    if (move.IsWhite) WhitePawn |= destinationMask;
+                    else BlackPawn |= destinationMask;
+                    break;
+                case (int) PieceType.Rook:
+                    if (move.IsWhite) WhiteRook |= destinationMask;
+                    else BlackRook |= destinationMask;
+                    break;
+                case (int) PieceType.Knight:
+                    if (move.IsWhite) WhiteKnight |= destinationMask;
+                    else BlackKnight |= destinationMask;
+                    break;
+                case (int) PieceType.Bishop:
+                    if (move.IsWhite) WhiteBishop |= destinationMask;
+                    else BlackBishop |= destinationMask;
+                    break;
+                case (int) PieceType.Queen:
+                    if (move.IsWhite) WhiteQueen |= destinationMask;
+                    else BlackQueen |= destinationMask;
+                    break;
+                case (int) PieceType.King:
+                    if (move.IsWhite) WhiteKing |= destinationMask;
+                    else BlackKing |= destinationMask;
+                    break;
+            }
+        }
+        
         // Push the state onto our stack
         moveStack.Push(state);
         previousMove = move;

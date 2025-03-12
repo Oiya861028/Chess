@@ -381,14 +381,77 @@ public class Evaluation
 
         int kingSq = BitOperations.TrailingZeroCount(kingBitboard);
         int enemySide = isWhite ? BLACK : WHITE;
-
+        ulong enemyPawns = isWhite ? blackPieces[PAWN] : whitePieces[PAWN];
         // Check for pawn attacks
-        if ((PawnAttacks[enemySide * 64 + kingSq] & (isWhite ? blackPieces[PAWN] : whitePieces[PAWN])) != 0)
-            return true;
+        if (isWhite) {
+            // White king is attacked by black pawns
+            int rank = kingSq / 8;
+            int file = kingSq % 8;
+            
+            // Only check if not on top rank (rank 7)
+            if (rank < 7) {
+                // Check up-right (from king's perspective)
+                if (file > 0) { // Not on h-file
+                    ulong upRightSq = 1UL << (kingSq + 7);
+                    if ((upRightSq & blackPieces[PAWN]) != 0)
+                        return true;
+                }
+                
+                // Check up-left (from king's perspective)
+                if (file < 7) { // Not on a-file
+                    ulong upLeftSq = 1UL << (kingSq + 9);
+                    if ((upLeftSq & blackPieces[PAWN]) != 0)
+                        return true;
+                }
+            }
+        } else {
+            // Black king is attacked by white pawns
+            // White pawns attack up-left and up-right from their perspective
+            // From king perspective, they're down-right and down-left
+            int rank = kingSq / 8;
+            int file = kingSq % 8;
+            
+            // Only check if not on bottom rank (rank 0)
+            if (rank > 0) {
+                // Check down-right (from king's perspective)
+                if (file > 0) { // Not on h-file
+                    ulong downRightSq = 1UL << (kingSq - 9);
+                    if ((downRightSq & whitePieces[PAWN]) != 0)
+                        return true;
+                }
+                
+                // Check down-left (from king's perspective)
+                if (file < 7) { // Not on a-file
+                    ulong downLeftSq = 1UL << (kingSq - 7);
+                    if ((downLeftSq & whitePieces[PAWN]) != 0)
+                        return true;
+                }
+            }
+        }
+
+        int kRank = kingSq / 8;
+        int kFile = kingSq % 8;
+        ulong enemyKnights = isWhite ? blackPieces[KNIGHT] : whitePieces[KNIGHT];
 
         // Check for knight attacks
-        if ((KnightAttacks[kingSq] & (isWhite ? blackPieces[KNIGHT] : whitePieces[KNIGHT])) != 0)
-            return true;
+        int[][] knightOffsets = new int[][] {
+            new int[] { -2, -1 }, new int[] { -2, 1 }, 
+            new int[] { -1, -2 }, new int[] { -1, 2 },
+            new int[] { 1, -2 }, new int[] { 1, 2 }, 
+            new int[] { 2, -1 }, new int[] { 2, 1 }
+        };
+
+        foreach (var offset in knightOffsets) {
+            int nRank = kRank + offset[0];
+            int nFile = kFile + offset[1];
+            
+            if (nRank >= 0 && nRank < 8 && nFile >= 0 && nFile < 8) {
+                int attackSq = nRank * 8 + nFile;
+                if ((enemyKnights & (1UL << attackSq)) != 0) {
+                    return true; // King is in check by a knight
+                }
+            }
+        }
 
         // Check for bishop/queen diagonal attacks
         ulong bishopAttacks = CalculateBishopAttacks(kingSq, allPieces);
