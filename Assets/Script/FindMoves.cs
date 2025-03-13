@@ -36,6 +36,7 @@ public class FindMoves
     }
 
     /// Gets all legal moves for the specified side
+
     public List<Move> GetAllPossibleMoves(bool isWhite, Move previousMove)
     {
         if (debugMode) Debug.Log("GetAllPossibleMoves called for " + (isWhite ? "white" : "black"));
@@ -102,120 +103,10 @@ public class FindMoves
         if (debugMode) Debug.Log($"Found {legalMoves.Count} legal moves");
         
         // Check castling moves and add them if legal
-        AddCastlingMoves(legalMoves, isWhite);
-        
-        return legalMoves;
-    }
-
-    // Helper method to get positions of set bits in a bitboard
-    private List<int> GetSetBitPositions(ulong bitboard)
-    {
-        List<int> positions = new List<int>();
-        ulong mask = 1UL;
-        
-        for (int i = 0; i < 64; i++)
-        {
-            if ((bitboard & mask) != 0)
-            {
-                positions.Add(i);
-            }
-            mask <<= 1;
-        }
-        
-        return positions;
-    }
-
-    // Add moves for a piece at a specific position
-    private void AddMovesForPosition(List<Move> moves, int position, PieceType pieceType, bool isWhite, Move previousMove)
-    {
-        ulong moveBitboard = GetPossibleMovesForPiece(position, pieceType, isWhite);
-        
-        // Convert bits to Move objects
-        for (int i = 0; i < 64; i++)
-        {
-            if ((moveBitboard & (1UL << i)) != 0)
-            {
-                bool isEnPassant = false;
-                bool isPawnDoubleMove = false;
-                bool isPromotion = false;
-                int promotionPieceType = (int)PieceType.Queen; // Default to Queen
-                
-                if (pieceType == PieceType.Pawn)
-                {
-                    // Check for pawn double move
-                    if (Math.Abs(position - i) == 16)
-                    {
-                        isPawnDoubleMove = true;
-                    }
-                    
-                    // Check for promotion (pawn reaching the last rank)
-                    int destRank = i / 8;
-                    if ((isWhite && destRank == 7) || (!isWhite && destRank == 0))
-                    {
-                        isPromotion = true;
-                        if (debugMode) Debug.Log($"Pawn promotion detected from {BitboardUtils.IndexToAlgebraic(position)} to {BitboardUtils.IndexToAlgebraic(i)}");
-                    }
-                    
-                    // Check for en passant capture
-                    int rank = position / 8;
-                    int file = position % 8;
-                    int targetRank = i / 8;
-                    int targetFile = i % 8;
-                    
-                    // If moving diagonally to an empty square, it might be en passant
-                    if (file != targetFile && (bitboard.returnAllPieces() & (1UL << i)) == 0)
-                    {
-                        // For white pawns on rank 5 (index 4)
-                        if (isWhite && rank == 4 && previousMove != null &&
-                            previousMove.PieceType == (int)PieceType.Pawn &&
-                            !previousMove.IsWhite && previousMove.IsPawnDoubleMove)
-                        {
-                            int enPassantFile = previousMove.Destination % 8;
-                            if (targetFile == enPassantFile)
-                            {
-                                isEnPassant = true;
-                                if (debugMode) Debug.Log($"En passant capture from {BitboardUtils.IndexToAlgebraic(position)} to {BitboardUtils.IndexToAlgebraic(i)}");
-                            }
-                        }
-                        // For black pawns on rank 4 (index 3)
-                        else if (!isWhite && rank == 3 && previousMove != null &&
-                                previousMove.PieceType == (int)PieceType.Pawn &&
-                                previousMove.IsWhite && previousMove.IsPawnDoubleMove)
-                        {
-                            int enPassantFile = previousMove.Destination % 8;
-                            if (targetFile == enPassantFile)
-                            {
-                                isEnPassant = true;
-                                if (debugMode) Debug.Log($"En passant capture from {BitboardUtils.IndexToAlgebraic(position)} to {BitboardUtils.IndexToAlgebraic(i)}");
-                            }
-                        }
-                    }
-                }
-                
-                moves.Add(new Move(position, i, previousMove, (int)pieceType, isWhite, 
-                                isEnPassant, isPawnDoubleMove, isPromotion, promotionPieceType));
-            }
-        }
-    }
-    
-    // Adds castling moves if legal
-    private void AddCastlingMoves(List<Move> legalMoves, bool isWhite) 
-    {
         int kingStartPosition = isWhite ? WHITE_KING_START : BLACK_KING_START;
         bool kingMoved = isWhite ? bitboard.whiteKingMoved : bitboard.blackKingMoved;
-        
-        // First check if king is in check - if so, can't castle
-        bool kingInCheck = evaluation.IsInCheck(isWhite, 
-                                             bitboard.returnWhitePiecesByTypes(), 
-                                             bitboard.returnBlackPiecesByTypes(), 
-                                             bitboard.returnAllPieces());
-        
-        if (kingInCheck) {
-            if (debugMode) Debug.Log($"{(isWhite ? "White" : "Black")} king is in check, cannot castle");
-            return;
-        }
-        
-        if (!kingMoved) {
+        bool kingInCheck = evaluation.IsInCheck(isWhite, bitboard.returnWhitePiecesByTypes(), bitboard.returnBlackPiecesByTypes(), bitboard.returnAllPieces());
+        if (!kingInCheck && !kingMoved) {
             ulong kingBitboard = isWhite ? bitboard.WhiteKing : bitboard.BlackKing;
             
             // Verify king is at starting position
@@ -313,9 +204,104 @@ public class FindMoves
                 }
             }
         }
+        
+        return legalMoves;
     }
 
+    // Helper method to get positions of set bits in a bitboard
+    private List<int> GetSetBitPositions(ulong bitboard)
+    {
+        List<int> positions = new List<int>();
+        ulong mask = 1UL;
+        
+        for (int i = 0; i < 64; i++)
+        {
+            if ((bitboard & mask) != 0)
+            {
+                positions.Add(i);
+            }
+            mask <<= 1;
+        }
+        
+        return positions;
+    }
+
+    // Add moves for a piece at a specific position
+    private void AddMovesForPosition(List<Move> moves, int position, PieceType pieceType, bool isWhite, Move previousMove)
+    {
+        ulong moveBitboard = GetPossibleMovesForPiece(position, pieceType, isWhite);
+        
+        // Convert bits to Move objects
+        for (int i = 0; i < 64; i++)
+        {
+            if ((moveBitboard & (1UL << i)) != 0)
+            {
+                bool isEnPassant = false;
+                bool isPawnDoubleMove = false;
+                bool isPromotion = false;
+                int promotionPieceType = (int)PieceType.Queen; // Default to Queen
+                
+                if (pieceType == PieceType.Pawn)
+                {
+                    // Check for pawn double move
+                    if (Math.Abs(position - i) == 16)
+                    {
+                        isPawnDoubleMove = true;
+                    }
+                    
+                    // Check for promotion (pawn reaching the last rank)
+                    int destRank = i / 8;
+                    if ((isWhite && destRank == 7) || (!isWhite && destRank == 0))
+                    {
+                        isPromotion = true;
+                        if (debugMode) Debug.Log($"Pawn promotion detected from {BitboardUtils.IndexToAlgebraic(position)} to {BitboardUtils.IndexToAlgebraic(i)}");
+                    }
+                    
+                    // Check for en passant capture
+                    int rank = position / 8;
+                    int file = position % 8;
+                    int targetRank = i / 8;
+                    int targetFile = i % 8;
+                    
+                    // If moving diagonally to an empty square, it might be en passant
+                    if (file != targetFile && (bitboard.returnAllPieces() & (1UL << i)) == 0)
+                    {
+                        // For white pawns on rank 5 (index 4)
+                        if (isWhite && rank == 4 && previousMove != null &&
+                            previousMove.PieceType == (int)PieceType.Pawn &&
+                            !previousMove.IsWhite && previousMove.IsPawnDoubleMove)
+                        {
+                            int enPassantFile = previousMove.Destination % 8;
+                            if (targetFile == enPassantFile)
+                            {
+                                isEnPassant = true;
+                                if (debugMode) Debug.Log($"En passant capture from {BitboardUtils.IndexToAlgebraic(position)} to {BitboardUtils.IndexToAlgebraic(i)}");
+                            }
+                        }
+                        // For black pawns on rank 4 (index 3)
+                        else if (!isWhite && rank == 3 && previousMove != null &&
+                                previousMove.PieceType == (int)PieceType.Pawn &&
+                                previousMove.IsWhite && previousMove.IsPawnDoubleMove)
+                        {
+                            int enPassantFile = previousMove.Destination % 8;
+                            if (targetFile == enPassantFile)
+                            {
+                                isEnPassant = true;
+                                if (debugMode) Debug.Log($"En passant capture from {BitboardUtils.IndexToAlgebraic(position)} to {BitboardUtils.IndexToAlgebraic(i)}");
+                            }
+                        }
+                    }
+                }
+                
+                moves.Add(new Move(position, i, previousMove, (int)pieceType, isWhite, 
+                                isEnPassant, isPawnDoubleMove, isPromotion, promotionPieceType));
+            }
+        }
+    }
+    
+
     // Adds moves for all pieces of a specific type
+
     private void AddMovesForPieceType(List<Move> moves, ulong pieceBitboard, int pieceType, bool isWhite, Move previousMove)
     {
         // Process each piece of this type
@@ -448,7 +434,6 @@ public class FindMoves
         
         return false;
     }
-    
     public ulong GetPossibleMoves(int position)
     {
         // Determine what piece is at this position
@@ -546,20 +531,9 @@ public class FindMoves
                 }
             }
         }
-        if (pieceType == PieceType.King) {
-            List<Move> tempMoves = new List<Move>();
-            AddCastlingMoves(tempMoves, isWhite);
-            
-            // Add any castling moves to the bitboard
-            foreach (Move move in tempMoves) {
-                if (move.Source == position) {
-                    legalMoves |= 1UL << move.Destination;
-                }
-            }
-        }
+        
         return legalMoves;
     }
-    
     private ulong GetPossibleMovesForPiece(int position, PieceType pieceType, bool isWhite)
     {  
         // Get combined piece bitboards
@@ -607,6 +581,53 @@ public class FindMoves
             default:
                 Debug.LogError($"Unknown piece type: {pieceType}");
                 return 0;
+        }
+        
+        // Add castling moves for kings with the corrected bit positions
+        if (pieceType == PieceType.King) {
+            // Check if this is a king in its starting position
+            if (isWhite && position == WHITE_KING_START && !bitboard.whiteKingMoved) {
+                // White kingside castling
+                if (!bitboard.whiteKingsideRookMoved) {
+                    ulong pathMask = (1UL << 1) | (1UL << 2); // g1, f1 in new mapping
+                    if ((allPieces & pathMask) == 0) {
+                        // Add kingside castling move if path is clear
+                        moves |= 1UL << 1; // g1 in new mapping
+                        if (debugMode) Debug.Log("Added potential white kingside castling to moveset");
+                    }
+                }
+                
+                // White queenside castling
+                if (!bitboard.whiteQueensideRookMoved) {
+                    ulong pathMask = (1UL << 4) | (1UL << 5) | (1UL << 6); // d1, c1, b1 in new mapping
+                    if ((allPieces & pathMask) == 0) {
+                        // Add queenside castling move if path is clear
+                        moves |= 1UL << 5; // c1 in new mapping
+                        if (debugMode) Debug.Log("Added potential white queenside castling to moveset");
+                    }
+                }
+            }
+            else if (!isWhite && position == BLACK_KING_START && !bitboard.blackKingMoved) {
+                // Black kingside castling
+                if (!bitboard.blackKingsideRookMoved) {
+                    ulong pathMask = (1UL << 57) | (1UL << 58); // g8, f8 in new mapping
+                    if ((allPieces & pathMask) == 0) {
+                        // Add kingside castling move if path is clear
+                        moves |= 1UL << 57; // g8 in new mapping
+                        if (debugMode) Debug.Log("Added potential black kingside castling to moveset");
+                    }
+                }
+                
+                // Black queenside castling
+                if (!bitboard.blackQueensideRookMoved) {
+                    ulong pathMask = (1UL << 60) | (1UL << 61) | (1UL << 62); // d8, c8, b8 in new mapping
+                    if ((allPieces & pathMask) == 0) {
+                        // Add queenside castling move if path is clear
+                        moves |= 1UL << 61; // c8 in new mapping
+                        if (debugMode) Debug.Log("Added potential black queenside castling to moveset");
+                    }
+                }
+            }
         }
         
         // If pinned, filter moves to only those along the pin line
@@ -662,7 +683,6 @@ public class FindMoves
         
         return moves;
     }
-    
     private ulong CalculatePawnMoves(int position, bool isWhite, ulong allPieces, ulong ownPieces, ulong enemyPieces)
     {
         ulong moves = 0;
@@ -881,6 +901,7 @@ public class FindMoves
         return moves;
     }
 
+
     // Calculate possible rook moves
     private ulong CalculateRookMoves(int position, ulong allPieces, ulong ownPieces)
     {
@@ -930,12 +951,14 @@ public class FindMoves
         return moves;
     }
 
+
     // Calculate possible queen moves (combines bishop and rook moves)
     private ulong CalculateQueenMoves(int position, ulong allPieces, ulong ownPieces)
     {
         return CalculateBishopMoves(position, allPieces, ownPieces) | 
                CalculateRookMoves(position, allPieces, ownPieces);
     }
+
 
     // Calculate possible king moves
     private ulong CalculateKingMoves(int position, ulong ownPieces)
@@ -971,13 +994,13 @@ public class FindMoves
         
         return moves;
     }
-    
     private string GetSquareName(int position)
     {
         return BitboardUtils.IndexToAlgebraic(position);
     }
     
     /// Helper method to find the trailing zero count in a 64-bit integer
+
     private static class BitOperations
     {
         public static int TrailingZeroCount(ulong value)
