@@ -587,44 +587,192 @@ public class FindMoves
         if (pieceType == PieceType.King) {
             // Check if this is a king in its starting position
             if (isWhite && position == WHITE_KING_START && !bitboard.whiteKingMoved) {
-                // White kingside castling
-                if (!bitboard.whiteKingsideRookMoved) {
-                    ulong pathMask = (1UL << 1) | (1UL << 2); // g1, f1 in new mapping
-                    if ((allPieces & pathMask) == 0) {
-                        // Add kingside castling move if path is clear
-                        moves |= 1UL << 1; // g1 in new mapping
-                        if (debugMode) Debug.Log("Added potential white kingside castling to moveset");
-                    }
-                }
+                // First check if king is in check - can't castle while in check
+                bool kingInCheck = evaluation.IsInCheck(isWhite, 
+                                                    bitboard.returnWhitePiecesByTypes(), 
+                                                    bitboard.returnBlackPiecesByTypes(), 
+                                                    bitboard.returnAllPieces());
                 
-                // White queenside castling
-                if (!bitboard.whiteQueensideRookMoved) {
-                    ulong pathMask = (1UL << 4) | (1UL << 5) | (1UL << 6); // d1, c1, b1 in new mapping
-                    if ((allPieces & pathMask) == 0) {
-                        // Add queenside castling move if path is clear
-                        moves |= 1UL << 5; // c1 in new mapping
-                        if (debugMode) Debug.Log("Added potential white queenside castling to moveset");
+                if (!kingInCheck) {
+                    // White kingside castling
+                    if (!bitboard.whiteKingsideRookMoved) {
+                        ulong pathMask = (1UL << 1) | (1UL << 2); // g1, f1 in new mapping
+                        if ((allPieces & pathMask) == 0) {
+                            // Check if king passes through check during castling
+                            bool canCastle = true;
+                            
+                            // Check the intermediate square (f1 - position 2)
+                            Move passThroughMove = new Move(position, 2, null, (int)PieceType.King, isWhite);
+                            bitboard.UpdateBitBoard(passThroughMove);
+                            bool passThroughCheck = evaluation.IsInCheck(isWhite, 
+                                                                        bitboard.returnWhitePiecesByTypes(), 
+                                                                        bitboard.returnBlackPiecesByTypes(), 
+                                                                        bitboard.returnAllPieces());
+                            bitboard.UndoBitboard();
+                            
+                            if (passThroughCheck) {
+                                canCastle = false;
+                            }
+                            
+                            // Check the destination square (g1 - position 1)
+                            if (canCastle) {
+                                Move destMove = new Move(position, 1, null, (int)PieceType.King, isWhite);
+                                bitboard.UpdateBitBoard(destMove);
+                                bool destCheck = evaluation.IsInCheck(isWhite, 
+                                                                    bitboard.returnWhitePiecesByTypes(), 
+                                                                    bitboard.returnBlackPiecesByTypes(), 
+                                                                    bitboard.returnAllPieces());
+                                bitboard.UndoBitboard();
+                                
+                                if (destCheck) {
+                                    canCastle = false;
+                                }
+                            }
+                            
+                            // Add kingside castling move if it's legal
+                            if (canCastle) {
+                                moves |= 1UL << 1; // g1 in new mapping
+                                if (debugMode) Debug.Log("Added validated white kingside castling to moveset");
+                            }
+                        }
+                    }
+                    
+                    // White queenside castling
+                    if (!bitboard.whiteQueensideRookMoved) {
+                        ulong pathMask = (1UL << 4) | (1UL << 5) | (1UL << 6); // d1, c1, b1 in new mapping
+                        if ((allPieces & pathMask) == 0) {
+                            // Check if king passes through check during castling
+                            bool canCastle = true;
+                            
+                            // Check the intermediate square (d1 - position 4)
+                            Move passThroughMove = new Move(position, 4, null, (int)PieceType.King, isWhite);
+                            bitboard.UpdateBitBoard(passThroughMove);
+                            bool passThroughCheck = evaluation.IsInCheck(isWhite, 
+                                                                        bitboard.returnWhitePiecesByTypes(), 
+                                                                        bitboard.returnBlackPiecesByTypes(), 
+                                                                        bitboard.returnAllPieces());
+                            bitboard.UndoBitboard();
+                            
+                            if (passThroughCheck) {
+                                canCastle = false;
+                            }
+                            
+                            // Check the destination square (c1 - position 5)
+                            if (canCastle) {
+                                Move destMove = new Move(position, 5, null, (int)PieceType.King, isWhite);
+                                bitboard.UpdateBitBoard(destMove);
+                                bool destCheck = evaluation.IsInCheck(isWhite, 
+                                                                    bitboard.returnWhitePiecesByTypes(), 
+                                                                    bitboard.returnBlackPiecesByTypes(), 
+                                                                    bitboard.returnAllPieces());
+                                bitboard.UndoBitboard();
+                                
+                                if (destCheck) {
+                                    canCastle = false;
+                                }
+                            }
+                            
+                            // Add queenside castling move if it's legal
+                            if (canCastle) {
+                                moves |= 1UL << 5; // c1 in new mapping
+                                if (debugMode) Debug.Log("Added validated white queenside castling to moveset");
+                            }
+                        }
                     }
                 }
             }
             else if (!isWhite && position == BLACK_KING_START && !bitboard.blackKingMoved) {
-                // Black kingside castling
-                if (!bitboard.blackKingsideRookMoved) {
-                    ulong pathMask = (1UL << 57) | (1UL << 58); // g8, f8 in new mapping
-                    if ((allPieces & pathMask) == 0) {
-                        // Add kingside castling move if path is clear
-                        moves |= 1UL << 57; // g8 in new mapping
-                        if (debugMode) Debug.Log("Added potential black kingside castling to moveset");
-                    }
-                }
+                // First check if king is in check - can't castle while in check
+                bool kingInCheck = evaluation.IsInCheck(isWhite, 
+                                                    bitboard.returnWhitePiecesByTypes(), 
+                                                    bitboard.returnBlackPiecesByTypes(), 
+                                                    bitboard.returnAllPieces());
                 
-                // Black queenside castling
-                if (!bitboard.blackQueensideRookMoved) {
-                    ulong pathMask = (1UL << 60) | (1UL << 61) | (1UL << 62); // d8, c8, b8 in new mapping
-                    if ((allPieces & pathMask) == 0) {
-                        // Add queenside castling move if path is clear
-                        moves |= 1UL << 61; // c8 in new mapping
-                        if (debugMode) Debug.Log("Added potential black queenside castling to moveset");
+                if (!kingInCheck) {
+                    // Black kingside castling
+                    if (!bitboard.blackKingsideRookMoved) {
+                        ulong pathMask = (1UL << 57) | (1UL << 58); // g8, f8 in new mapping
+                        if ((allPieces & pathMask) == 0) {
+                            // Check if king passes through check during castling
+                            bool canCastle = true;
+                            
+                            // Check the intermediate square (f8 - position 58)
+                            Move passThroughMove = new Move(position, 58, null, (int)PieceType.King, isWhite);
+                            bitboard.UpdateBitBoard(passThroughMove);
+                            bool passThroughCheck = evaluation.IsInCheck(isWhite, 
+                                                                        bitboard.returnWhitePiecesByTypes(), 
+                                                                        bitboard.returnBlackPiecesByTypes(), 
+                                                                        bitboard.returnAllPieces());
+                            bitboard.UndoBitboard();
+                            
+                            if (passThroughCheck) {
+                                canCastle = false;
+                            }
+                            
+                            // Check the destination square (g8 - position 57)
+                            if (canCastle) {
+                                Move destMove = new Move(position, 57, null, (int)PieceType.King, isWhite);
+                                bitboard.UpdateBitBoard(destMove);
+                                bool destCheck = evaluation.IsInCheck(isWhite, 
+                                                                    bitboard.returnWhitePiecesByTypes(), 
+                                                                    bitboard.returnBlackPiecesByTypes(), 
+                                                                    bitboard.returnAllPieces());
+                                bitboard.UndoBitboard();
+                                
+                                if (destCheck) {
+                                    canCastle = false;
+                                }
+                            }
+                            
+                            // Add kingside castling move if it's legal
+                            if (canCastle) {
+                                moves |= 1UL << 57; // g8 in new mapping
+                                if (debugMode) Debug.Log("Added validated black kingside castling to moveset");
+                            }
+                        }
+                    }
+                    
+                    // Black queenside castling
+                    if (!bitboard.blackQueensideRookMoved) {
+                        ulong pathMask = (1UL << 60) | (1UL << 61) | (1UL << 62); // d8, c8, b8 in new mapping
+                        if ((allPieces & pathMask) == 0) {
+                            // Check if king passes through check during castling
+                            bool canCastle = true;
+                            
+                            // Check the intermediate square (d8 - position 60)
+                            Move passThroughMove = new Move(position, 60, null, (int)PieceType.King, isWhite);
+                            bitboard.UpdateBitBoard(passThroughMove);
+                            bool passThroughCheck = evaluation.IsInCheck(isWhite, 
+                                                                        bitboard.returnWhitePiecesByTypes(), 
+                                                                        bitboard.returnBlackPiecesByTypes(), 
+                                                                        bitboard.returnAllPieces());
+                            bitboard.UndoBitboard();
+                            
+                            if (passThroughCheck) {
+                                canCastle = false;
+                            }
+                            
+                            // Check the destination square (c8 - position 61)
+                            if (canCastle) {
+                                Move destMove = new Move(position, 61, null, (int)PieceType.King, isWhite);
+                                bitboard.UpdateBitBoard(destMove);
+                                bool destCheck = evaluation.IsInCheck(isWhite, 
+                                                                    bitboard.returnWhitePiecesByTypes(), 
+                                                                    bitboard.returnBlackPiecesByTypes(), 
+                                                                    bitboard.returnAllPieces());
+                                bitboard.UndoBitboard();
+                                
+                                if (destCheck) {
+                                    canCastle = false;
+                                }
+                            }
+                            
+                            // Add queenside castling move if it's legal
+                            if (canCastle) {
+                                moves |= 1UL << 61; // c8 in new mapping
+                                if (debugMode) Debug.Log("Added validated black queenside castling to moveset");
+                            }
+                        }
                     }
                 }
             }
