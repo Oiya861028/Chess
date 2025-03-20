@@ -163,6 +163,65 @@ public class Bitboard {
             blackKingsideRookMoved = true;
         }
 
+        // PROMOTION SPECIAL CASE - handle completely separately from regular moves
+        if (move.IsPromotion)
+        {
+            Debug.Log("HANDLING PROMOTION: " + BitboardUtils.IndexToAlgebraic(move.Source) + 
+                    " to " + BitboardUtils.IndexToAlgebraic(move.Destination));
+            
+            // 1. First record any pieces being captured at the destination
+            if (!move.IsWhite) {
+                state.capturedPieces[WHITE_PAWN] = WhitePawn & destinationMask;
+                state.capturedPieces[WHITE_KNIGHT] = WhiteKnight & destinationMask;
+                state.capturedPieces[WHITE_BISHOP] = WhiteBishop & destinationMask;
+                state.capturedPieces[WHITE_ROOK] = WhiteRook & destinationMask;
+                state.capturedPieces[WHITE_QUEEN] = WhiteQueen & destinationMask;
+                
+                // Clear any white pieces at the destination
+                WhitePawn &= ~destinationMask;
+                WhiteRook &= ~destinationMask;
+                WhiteKnight &= ~destinationMask;
+                WhiteBishop &= ~destinationMask;
+                WhiteQueen &= ~destinationMask;
+            } 
+            else {
+                state.capturedPieces[BLACK_PAWN] = BlackPawn & destinationMask;
+                state.capturedPieces[BLACK_KNIGHT] = BlackKnight & destinationMask;
+                state.capturedPieces[BLACK_BISHOP] = BlackBishop & destinationMask;
+                state.capturedPieces[BLACK_ROOK] = BlackRook & destinationMask;
+                state.capturedPieces[BLACK_QUEEN] = BlackQueen & destinationMask;
+                
+                // Clear any black pieces at the destination
+                BlackPawn &= ~destinationMask;
+                BlackRook &= ~destinationMask;
+                BlackKnight &= ~destinationMask;
+                BlackBishop &= ~destinationMask;
+                BlackQueen &= ~destinationMask;
+            }
+            
+            // 2. Remove the pawn from its source position
+            if (move.IsWhite) {
+                WhitePawn &= ~sourceMask;
+            } else {
+                BlackPawn &= ~sourceMask;
+            }
+            
+            // 3. Add the queen at the destination position
+            if (move.IsWhite) {
+                WhiteQueen |= destinationMask;
+            } else {
+                BlackQueen |= destinationMask;
+            }
+            
+            Debug.Log($"Pawn promotion complete: Queen at {BitboardUtils.IndexToAlgebraic(move.Destination)}");
+            
+            // Push the state onto our stack and finish
+            moveStack.Push(state);
+            previousMove = move;
+            return;
+        }
+        
+        // NON-PROMOTION CASE - regular move handling
         // Record any pieces that might be captured at the destination
         // White pieces that might be captured by black
         if (!move.IsWhite) {
@@ -225,47 +284,32 @@ public class Bitboard {
                 break;
         }
 
-        // Handle pawn promotion - determine destination piece type
-        if (move.IsPromotion)
-        {
-            // For now, we always promote to queen
-            if (move.IsWhite)
-                WhiteQueen |= destinationMask;
-            else
-                BlackQueen |= destinationMask;
-                
-            // Debug output for promotion
-            Debug.Log($"Pawn promoted to Queen at {BitboardUtils.IndexToAlgebraic(move.Destination)}");
-        }
-        else
-        {
-            // Place the piece at the destination position (normal move)
-            switch (move.PieceType) {
-                case (int) PieceType.Pawn:
-                    if (move.IsWhite) WhitePawn |= destinationMask;
-                    else BlackPawn |= destinationMask;
-                    break;
-                case (int) PieceType.Rook:
-                    if (move.IsWhite) WhiteRook |= destinationMask;
-                    else BlackRook |= destinationMask;
-                    break;
-                case (int) PieceType.Knight:
-                    if (move.IsWhite) WhiteKnight |= destinationMask;
-                    else BlackKnight |= destinationMask;
-                    break;
-                case (int) PieceType.Bishop:
-                    if (move.IsWhite) WhiteBishop |= destinationMask;
-                    else BlackBishop |= destinationMask;
-                    break;
-                case (int) PieceType.Queen:
-                    if (move.IsWhite) WhiteQueen |= destinationMask;
-                    else BlackQueen |= destinationMask;
-                    break;
-                case (int) PieceType.King:
-                    if (move.IsWhite) WhiteKing |= destinationMask;
-                    else BlackKing |= destinationMask;
-                    break;
-            }
+        // Place the piece at the destination position (normal move)
+        switch (move.PieceType) {
+            case (int) PieceType.Pawn:
+                if (move.IsWhite) WhitePawn |= destinationMask;
+                else BlackPawn |= destinationMask;
+                break;
+            case (int) PieceType.Rook:
+                if (move.IsWhite) WhiteRook |= destinationMask;
+                else BlackRook |= destinationMask;
+                break;
+            case (int) PieceType.Knight:
+                if (move.IsWhite) WhiteKnight |= destinationMask;
+                else BlackKnight |= destinationMask;
+                break;
+            case (int) PieceType.Bishop:
+                if (move.IsWhite) WhiteBishop |= destinationMask;
+                else BlackBishop |= destinationMask;
+                break;
+            case (int) PieceType.Queen:
+                if (move.IsWhite) WhiteQueen |= destinationMask;
+                else BlackQueen |= destinationMask;
+                break;
+            case (int) PieceType.King:
+                if (move.IsWhite) WhiteKing |= destinationMask;
+                else BlackKing |= destinationMask;
+                break;
         }
         
         // Push the state onto our stack
@@ -280,60 +324,82 @@ public class Bitboard {
         ulong sourceMask = 1UL << previousMove.Source;
         ulong destinationMask = 1UL << previousMove.Destination;
 
-        // Remove the piece from the destination position
-        switch ((PieceType) previousMove.PieceType) {
-            case PieceType.Pawn:
-                if (previousMove.IsWhite) WhitePawn &= ~destinationMask;
-                else BlackPawn &= ~destinationMask;
-                break;
-            case PieceType.Rook:
-                if (previousMove.IsWhite) WhiteRook &= ~destinationMask;
-                else BlackRook &= ~destinationMask;
-                break;
-            case PieceType.Knight:
-                if (previousMove.IsWhite) WhiteKnight &= ~destinationMask;
-                else BlackKnight &= ~destinationMask;
-                break;
-            case PieceType.Bishop:
-                if (previousMove.IsWhite) WhiteBishop &= ~destinationMask;
-                else BlackBishop &= ~destinationMask;
-                break;
-            case PieceType.Queen:
-                if (previousMove.IsWhite) WhiteQueen &= ~destinationMask;
-                else BlackQueen &= ~destinationMask;
-                break;
-            case PieceType.King:
-                if (previousMove.IsWhite) WhiteKing &= ~destinationMask;
-                else BlackKing &= ~destinationMask;
-                break;
+        // Special handling for promotion
+        if (previousMove.IsPromotion)
+        {
+            Debug.Log($"Undoing promotion from {BitboardUtils.IndexToAlgebraic(previousMove.Source)} to {BitboardUtils.IndexToAlgebraic(previousMove.Destination)}");
+            
+            // 1. Remove the promoted piece (queen) from the destination
+            if (previousMove.IsWhite) {
+                WhiteQueen &= ~destinationMask;
+            } else {
+                BlackQueen &= ~destinationMask;
+            }
+            
+            // 2. Add the pawn back at the source
+            if (previousMove.IsWhite) {
+                WhitePawn |= sourceMask;
+            } else {
+                BlackPawn |= sourceMask;
+            }
         }
+        else 
+        {
+            // Remove the piece from the destination position
+            switch ((PieceType) previousMove.PieceType) {
+                case PieceType.Pawn:
+                    if (previousMove.IsWhite) WhitePawn &= ~destinationMask;
+                    else BlackPawn &= ~destinationMask;
+                    break;
+                case PieceType.Rook:
+                    if (previousMove.IsWhite) WhiteRook &= ~destinationMask;
+                    else BlackRook &= ~destinationMask;
+                    break;
+                case PieceType.Knight:
+                    if (previousMove.IsWhite) WhiteKnight &= ~destinationMask;
+                    else BlackKnight &= ~destinationMask;
+                    break;
+                case PieceType.Bishop:
+                    if (previousMove.IsWhite) WhiteBishop &= ~destinationMask;
+                    else BlackBishop &= ~destinationMask;
+                    break;
+                case PieceType.Queen:
+                    if (previousMove.IsWhite) WhiteQueen &= ~destinationMask;
+                    else BlackQueen &= ~destinationMask;
+                    break;
+                case PieceType.King:
+                    if (previousMove.IsWhite) WhiteKing &= ~destinationMask;
+                    else BlackKing &= ~destinationMask;
+                    break;
+            }
 
-        // Place the piece back at the source position
-        switch ((PieceType) previousMove.PieceType) {
-            case PieceType.Pawn:
-                if (previousMove.IsWhite) WhitePawn |= sourceMask;
-                else BlackPawn |= sourceMask;
-                break;
-            case PieceType.Rook:
-                if (previousMove.IsWhite) WhiteRook |= sourceMask;
-                else BlackRook |= sourceMask;
-                break;
-            case PieceType.Knight:
-                if (previousMove.IsWhite) WhiteKnight |= sourceMask;
-                else BlackKnight |= sourceMask;
-                break;
-            case PieceType.Bishop:
-                if (previousMove.IsWhite) WhiteBishop |= sourceMask;
-                else BlackBishop |= sourceMask;
-                break;
-            case PieceType.Queen:
-                if (previousMove.IsWhite) WhiteQueen |= sourceMask;
-                else BlackQueen |= sourceMask;
-                break;
-            case PieceType.King:
-                if (previousMove.IsWhite) WhiteKing |= sourceMask;
-                else BlackKing |= sourceMask;
-                break;
+            // Place the piece back at the source position
+            switch ((PieceType) previousMove.PieceType) {
+                case PieceType.Pawn:
+                    if (previousMove.IsWhite) WhitePawn |= sourceMask;
+                    else BlackPawn |= sourceMask;
+                    break;
+                case PieceType.Rook:
+                    if (previousMove.IsWhite) WhiteRook |= sourceMask;
+                    else BlackRook |= sourceMask;
+                    break;
+                case PieceType.Knight:
+                    if (previousMove.IsWhite) WhiteKnight |= sourceMask;
+                    else BlackKnight |= sourceMask;
+                    break;
+                case PieceType.Bishop:
+                    if (previousMove.IsWhite) WhiteBishop |= sourceMask;
+                    else BlackBishop |= sourceMask;
+                    break;
+                case PieceType.Queen:
+                    if (previousMove.IsWhite) WhiteQueen |= sourceMask;
+                    else BlackQueen |= sourceMask;
+                    break;
+                case PieceType.King:
+                    if (previousMove.IsWhite) WhiteKing |= sourceMask;
+                    else BlackKing |= sourceMask;
+                    break;
+            }
         }
 
         // Get captured pieces from the stack and restore them

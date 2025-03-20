@@ -894,11 +894,24 @@ public class BoardController : MonoBehaviour
 
         if (movingPieceType == PieceType.Pawn)
         {
+            // Get the exact destination rank
             int destRank = toIndex / 8;
+            
+            // IMPORTANT: Make sure we're ACTUALLY at the promotion rank (7 for white, 0 for black)
+            // Not just attacking diagonally from the rank before
             if ((isWhitePiece && destRank == 7) || (!isWhitePiece && destRank == 0))
             {
-                isPromotion = true;
-                Debug.Log($"Pawn promotion detected from {BitboardUtils.IndexToAlgebraic(fromIndex)} to {BitboardUtils.IndexToAlgebraic(toIndex)}");
+                // Double-check source rank to ensure it's a legal promotion move
+                int sourceRank = fromIndex / 8;
+                if ((isWhitePiece && sourceRank == 6) || (!isWhitePiece && sourceRank == 1))
+                {
+                    isPromotion = true;
+                    Debug.Log($"VALID Pawn promotion detected from {BitboardUtils.IndexToAlgebraic(fromIndex)} to {BitboardUtils.IndexToAlgebraic(toIndex)}");
+                }
+                else
+                {
+                    Debug.LogWarning($"INVALID promotion attempt - pawn not from correct rank: {BitboardUtils.IndexToAlgebraic(fromIndex)} to {BitboardUtils.IndexToAlgebraic(toIndex)}");
+                }
             }
         }
         
@@ -1018,6 +1031,15 @@ public class BoardController : MonoBehaviour
         // Check for double pawn move
         bool isPawnDoubleMove = movingPieceType == PieceType.Pawn && Math.Abs(fromIndex - toIndex) == 16;
         
+        // IMPORTANT: First destroy the old piece GameObject before updating the bitboard
+        // This prevents visual pieces from lingering after bitboard changes
+        if (selectedPiece != null)
+        {
+            Debug.Log("Destroying old piece: " + selectedPiece.name);
+            DestroyImmediate(selectedPiece);
+            selectedPiece = null;
+        }
+        
         // Move the piece in the bitboard
         Move move = new Move(fromIndex, toIndex, previousMove, (int)movingPieceType, isWhitePiece, 
                             isEnPassant, isPawnDoubleMove, isPromotion, promotionPieceType);
@@ -1031,15 +1053,22 @@ public class BoardController : MonoBehaviour
         
         // Calculate the exact world position for the destination
         Vector3 destinationPosition = GetWorldPositionForBit(toIndex);
-
-        // Destroy the old piece GameObject
-        DestroyImmediate(selectedPiece);
         
         // Handle visual piece creation
         if (isPromotion)
         {
+            Debug.Log($"CREATING PROMOTION PIECE: Pawn at {BitboardUtils.IndexToAlgebraic(fromIndex)} promoting on {BitboardUtils.IndexToAlgebraic(toIndex)}");
+            
             // For promotion, use the Queen prefab
             GameObject prefabToUse = isWhitePiece ? whiteQueenPrefab : blackQueenPrefab;
+            
+            // Check if there's already a piece at the destination (shouldn't be after updating bitboard)
+            GameObject existingPiece = FindPieceAtPosition(toIndex);
+            if (existingPiece != null)
+            {
+                Debug.LogWarning($"Found existing piece at promotion square: {existingPiece.name} - destroying it");
+                DestroyImmediate(existingPiece);
+            }
             
             // The piece name should now be Queen instead of Pawn
             string pieceName = (isWhitePiece ? "White" : "Black") + "Queen_" + toIndex;
