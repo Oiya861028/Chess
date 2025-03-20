@@ -396,14 +396,36 @@ public class FindMoves
             fileDir = pieceFile > kingFile ? 1 : -1;
         }
         
+        // Check for pieces between king and the potentially pinned piece
+        int r = kingRank + rankDir;
+        int f = kingFile + fileDir;
+        
+        while ((r != pieceRank || f != pieceFile) && r >= 0 && r < 8 && f >= 0 && f < 8)
+        {
+            int squareIndex = r * 8 + f;
+            ulong squareMask = 1UL << squareIndex;
+            
+            // If any piece exists between king and potentially pinned piece, 
+            // then this piece cannot be pinned
+            if ((bitboard.returnAllPieces() & squareMask) != 0)
+            {
+                return false;
+            }
+            
+            r += rankDir;
+            f += fileDir;
+        }
+        
         // Get enemy sliding pieces
         ulong enemyRooks = isWhite ? bitboard.BlackRook : bitboard.WhiteRook;
         ulong enemyBishops = isWhite ? bitboard.BlackBishop : bitboard.WhiteBishop;
         ulong enemyQueens = isWhite ? bitboard.BlackQueen : bitboard.WhiteQueen;
         
         // Check for pinning piece beyond the piece being checked
-        int r = pieceRank + rankDir;
-        int f = pieceFile + fileDir;
+        r = pieceRank + rankDir;
+        f = pieceFile + fileDir;
+        
+        bool foundPinner = false;
         
         while (r >= 0 && r < 8 && f >= 0 && f < 8)
         {
@@ -413,7 +435,7 @@ public class FindMoves
             // If we hit a piece
             if ((bitboard.returnAllPieces() & squareMask) != 0)
             {
-
+                // Check if this piece is a potential pinner
                 bool isPinner = false;
                 
                 if (onSameRank || onSameFile)
@@ -425,14 +447,21 @@ public class FindMoves
                     isPinner = (enemyBishops & squareMask) != 0 || (enemyQueens & squareMask) != 0;
                 }
                 
-                return isPinner;
+                // If it's a pinner, we found our pin
+                if (isPinner)
+                {
+                    foundPinner = true;
+                }
+                
+                // Whether it's a pinner or not, we found a piece, so stop searching
+                break;
             }
             
             r += rankDir;
             f += fileDir;
         }
         
-        return false;
+        return foundPinner;
     }
     public ulong GetPossibleMoves(int position)
     {
