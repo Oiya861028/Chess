@@ -7,7 +7,7 @@ public class FindMoves
     private Bitboard bitboard;
     private Evaluation evaluation;
     private Move previousMove;
-    private MagicBitboards magicBitboards;
+    
     // Constants for the correct bit positions
     private const int WHITE_KING_START = 3;     // e1
     private const int BLACK_KING_START = 59;    // e8
@@ -33,7 +33,7 @@ public class FindMoves
         this.bitboard = bitboard;
         this.evaluation = new Evaluation();
         this.previousMove = null;
-        this.magicBitboards = new MagicBitboards();
+        
         // Initialize attack tables
         InitializeAttackTables();
         
@@ -322,74 +322,39 @@ public class FindMoves
             case PieceType.King:
                 ulong moves = kingAttacks[position] & ~ownPieces;
                 
-                // Check if king is currently in check - can't castle when in check
-                bool kingInCheck = evaluation.IsInCheck(isWhite, 
-                    bitboard.returnWhitePiecesByTypes(), 
-                    bitboard.returnBlackPiecesByTypes(), 
-                    bitboard.returnAllPieces());
-                
-                // Only add castling moves if king is not in check
-                if (!kingInCheck)
+                // Add castling moves for kings
+                if (isWhite && position == WHITE_KING_START && !bitboard.whiteKingMoved)
                 {
-                    // Add castling moves for kings
-                    if (isWhite && position == WHITE_KING_START && !bitboard.whiteKingMoved)
+                    // Check kingside castling
+                    if (!bitboard.whiteKingsideRookMoved && 
+                        (allPieces & ((1UL << 1) | (1UL << 2))) == 0)
                     {
-                        // Check kingside castling
-                        if (!bitboard.whiteKingsideRookMoved && 
-                            (allPieces & ((1UL << 1) | (1UL << 2))) == 0)
-                        {
-                            // Check if f1 is under attack
-                            bool f1UnderAttack = IsSquareUnderAttack(2, false);
-                            
-                            if (!f1UnderAttack)
-                            {
-                                moves |= 1UL << 1; // g1
-                            }
-                        }
-                        
-                        // Check queenside castling
-                        if (!bitboard.whiteQueensideRookMoved && 
-                            (allPieces & ((1UL << 4) | (1UL << 5) | (1UL << 6))) == 0)
-                        {
-                            // Check if d1 is under attack
-                            bool d1UnderAttack = IsSquareUnderAttack(4, false);
-                            
-                            if (!d1UnderAttack)
-                            {
-                                moves |= 1UL << 5; // c1
-                            }
-                        }
+                        moves |= 1UL << 1; // g1
                     }
-                    else if (!isWhite && position == BLACK_KING_START && !bitboard.blackKingMoved)
+                    
+                    // Check queenside castling
+                    if (!bitboard.whiteQueensideRookMoved && 
+                        (allPieces & ((1UL << 4) | (1UL << 5) | (1UL << 6))) == 0)
                     {
-                        // Check kingside castling
-                        if (!bitboard.blackKingsideRookMoved && 
-                            (allPieces & ((1UL << 57) | (1UL << 58))) == 0)
-                        {
-                            // Check if f8 is under attack
-                            bool f8UnderAttack = IsSquareUnderAttack(58, true);
-                            
-                            if (!f8UnderAttack)
-                            {
-                                moves |= 1UL << 57; // g8
-                            }
-                        }
-                        
-                        // Check queenside castling
-                        if (!bitboard.blackQueensideRookMoved && 
-                            (allPieces & ((1UL << 60) | (1UL << 61) | (1UL << 62))) == 0)
-                        {
-                            // Check if d8 is under attack
-                            bool d8UnderAttack = IsSquareUnderAttack(60, true);
-                            
-                            if (!d8UnderAttack)
-                            {
-                                moves |= 1UL << 61; // c8
-                            }
-                        }
+                        moves |= 1UL << 5; // c1
                     }
                 }
-
+                else if (!isWhite && position == BLACK_KING_START && !bitboard.blackKingMoved)
+                {
+                    // Check kingside castling
+                    if (!bitboard.blackKingsideRookMoved && 
+                        (allPieces & ((1UL << 57) | (1UL << 58))) == 0)
+                    {
+                        moves |= 1UL << 57; // g8
+                    }
+                    
+                    // Check queenside castling
+                    if (!bitboard.blackQueensideRookMoved && 
+                        (allPieces & ((1UL << 60) | (1UL << 61) | (1UL << 62))) == 0)
+                    {
+                        moves |= 1UL << 61; // c8
+                    }
+                }
                 
                 return moves;
                 
@@ -649,44 +614,7 @@ public class FindMoves
             attacks &= attacks - 1; // Clear LSB
         }
     }
-    private bool IsSquareUnderAttack(int square, bool byWhite)
-    {
-        // Temporarily place a king on the square to check if it would be attacked
-        ulong originalWhiteKing = bitboard.WhiteKing;
-        ulong originalBlackKing = bitboard.BlackKing;
-        
-        if (!byWhite) // Checking if square is attacked by black
-        {
-            // Place white king temporarily on square
-            bitboard.WhiteKing = 1UL << square;
-            
-            // Check if white king would be in check
-            bool isAttacked = evaluation.IsInCheck(true, 
-                bitboard.returnWhitePiecesByTypes(), 
-                bitboard.returnBlackPiecesByTypes(), 
-                bitboard.returnAllPieces());
-                
-            // Restore original king position
-            bitboard.WhiteKing = originalWhiteKing;
-            return isAttacked;
-        }
-        else // Checking if square is attacked by white
-        {
-            // Place black king temporarily on square
-            bitboard.BlackKing = 1UL << square;
-            
-            // Check if black king would be in check
-            bool isAttacked = evaluation.IsInCheck(false, 
-                bitboard.returnWhitePiecesByTypes(), 
-                bitboard.returnBlackPiecesByTypes(), 
-                bitboard.returnAllPieces());
-                
-            // Restore original king position
-            bitboard.BlackKing = originalBlackKing;
-            return isAttacked;
-        }
-    }
-
+    
     private void AddKingMoves(List<Move> moves, int position, bool isWhite)
     {
         ulong ownPieces = isWhite ? bitboard.returnAllWhitePieces() : bitboard.returnAllBlackPieces();
@@ -701,75 +629,41 @@ public class FindMoves
             attacks &= attacks - 1; // Clear LSB
         }
         
-        // Check if king is currently in check - can't castle when in check
-        bool kingInCheck = evaluation.IsInCheck(isWhite, 
-            bitboard.returnWhitePiecesByTypes(), 
-            bitboard.returnBlackPiecesByTypes(), 
-            bitboard.returnAllPieces());
-        
-        // Don't allow castling if king is in check
-        if (!kingInCheck)
+        // Castling moves
+        if (isWhite && position == WHITE_KING_START && !bitboard.whiteKingMoved)
         {
-            // Castling moves
-            if (isWhite && position == WHITE_KING_START && !bitboard.whiteKingMoved)
+            // Check kingside castling
+            if (!bitboard.whiteKingsideRookMoved && 
+                (bitboard.returnAllPieces() & ((1UL << 1) | (1UL << 2))) == 0)
             {
-                // Check kingside castling
-                if (!bitboard.whiteKingsideRookMoved && 
-                    (bitboard.returnAllPieces() & ((1UL << 1) | (1UL << 2))) == 0)
-                {
-                    // Check if square f1 (the square king passes through) is under attack
-                    bool f1UnderAttack = IsSquareUnderAttack(2, false); // f1 is square 2 (0-indexed), check if attacked by black
-                    
-                    if (!f1UnderAttack)
-                    {
-                        moves.Add(new Move(position, 1, previousMove, (int)PieceType.King, isWhite));
-                        if (debugMode) Debug.Log("Added white kingside castling move");
-                    }
-                }
-                
-                // Check queenside castling
-                if (!bitboard.whiteQueensideRookMoved && 
-                    (bitboard.returnAllPieces() & ((1UL << 4) | (1UL << 5) | (1UL << 6))) == 0)
-                {
-                    // Check if square d1 (the square king passes through) is under attack
-                    bool d1UnderAttack = IsSquareUnderAttack(4, false); // d1 is square 4 (0-indexed), check if attacked by black
-                    
-                    if (!d1UnderAttack)
-                    {
-                        moves.Add(new Move(position, 5, previousMove, (int)PieceType.King, isWhite));
-                        if (debugMode) Debug.Log("Added white queenside castling move");
-                    }
-                }
+                moves.Add(new Move(position, 1, previousMove, (int)PieceType.King, isWhite));
+                if (debugMode) Debug.Log("Added white kingside castling move");
             }
-            else if (!isWhite && position == BLACK_KING_START && !bitboard.blackKingMoved)
+            
+            // Check queenside castling
+            if (!bitboard.whiteQueensideRookMoved && 
+                (bitboard.returnAllPieces() & ((1UL << 4) | (1UL << 5) | (1UL << 6))) == 0)
             {
-                // Check kingside castling
-                if (!bitboard.blackKingsideRookMoved && 
-                    (bitboard.returnAllPieces() & ((1UL << 57) | (1UL << 58))) == 0)
-                {
-                    // Check if square f8 (the square king passes through) is under attack
-                    bool f8UnderAttack = IsSquareUnderAttack(58, true); // f8 is square 58 (0-indexed), check if attacked by white
-                    
-                    if (!f8UnderAttack)
-                    {
-                        moves.Add(new Move(position, 57, previousMove, (int)PieceType.King, isWhite));
-                        if (debugMode) Debug.Log("Added black kingside castling move");
-                    }
-                }
-                
-                // Check queenside castling
-                if (!bitboard.blackQueensideRookMoved && 
-                    (bitboard.returnAllPieces() & ((1UL << 60) | (1UL << 61) | (1UL << 62))) == 0)
-                {
-                    // Check if square d8 (the square king passes through) is under attack
-                    bool d8UnderAttack = IsSquareUnderAttack(60, true); // d8 is square 60 (0-indexed), check if attacked by white
-                    
-                    if (!d8UnderAttack)
-                    {
-                        moves.Add(new Move(position, 61, previousMove, (int)PieceType.King, isWhite));
-                        if (debugMode) Debug.Log("Added black queenside castling move");
-                    }
-                }
+                moves.Add(new Move(position, 5, previousMove, (int)PieceType.King, isWhite));
+                if (debugMode) Debug.Log("Added white queenside castling move");
+            }
+        }
+        else if (!isWhite && position == BLACK_KING_START && !bitboard.blackKingMoved)
+        {
+            // Check kingside castling
+            if (!bitboard.blackKingsideRookMoved && 
+                (bitboard.returnAllPieces() & ((1UL << 57) | (1UL << 58))) == 0)
+            {
+                moves.Add(new Move(position, 57, previousMove, (int)PieceType.King, isWhite));
+                if (debugMode) Debug.Log("Added black kingside castling move");
+            }
+            
+            // Check queenside castling
+            if (!bitboard.blackQueensideRookMoved && 
+                (bitboard.returnAllPieces() & ((1UL << 60) | (1UL << 61) | (1UL << 62))) == 0)
+            {
+                moves.Add(new Move(position, 61, previousMove, (int)PieceType.King, isWhite));
+                if (debugMode) Debug.Log("Added black queenside castling move");
             }
         }
     }
@@ -777,13 +671,85 @@ public class FindMoves
     // Optimized bishop attack calculation
     private ulong CalculateBishopAttacks(int square, ulong occupied)
     {
-        return magicBitboards.GetBishopAttacks(square, occupied);
+        int rank = square / 8;
+        int file = square % 8;
+        ulong attacks = 0;
+        
+        // Northeast
+        for (int r = rank + 1, f = file + 1; r < 8 && f < 8; r++, f++)
+        {
+            ulong squareMask = 1UL << (r * 8 + f);
+            attacks |= squareMask;
+            if ((occupied & squareMask) != 0) break;
+        }
+        
+        // Southeast
+        for (int r = rank - 1, f = file + 1; r >= 0 && f < 8; r--, f++)
+        {
+            ulong squareMask = 1UL << (r * 8 + f);
+            attacks |= squareMask;
+            if ((occupied & squareMask) != 0) break;
+        }
+        
+        // Southwest
+        for (int r = rank - 1, f = file - 1; r >= 0 && f >= 0; r--, f--)
+        {
+            ulong squareMask = 1UL << (r * 8 + f);
+            attacks |= squareMask;
+            if ((occupied & squareMask) != 0) break;
+        }
+        
+        // Northwest
+        for (int r = rank + 1, f = file - 1; r < 8 && f >= 0; r++, f--)
+        {
+            ulong squareMask = 1UL << (r * 8 + f);
+            attacks |= squareMask;
+            if ((occupied & squareMask) != 0) break;
+        }
+        
+        return attacks;
     }
     
     // Optimized rook attack calculation
     private ulong CalculateRookAttacks(int square, ulong occupied)
     {
-        return magicBitboards.GetRookAttacks(square, occupied);
+        int rank = square / 8;
+        int file = square % 8;
+        ulong attacks = 0;
+        
+        // North
+        for (int r = rank + 1; r < 8; r++)
+        {
+            ulong squareMask = 1UL << (r * 8 + file);
+            attacks |= squareMask;
+            if ((occupied & squareMask) != 0) break;
+        }
+        
+        // East
+        for (int f = file + 1; f < 8; f++)
+        {
+            ulong squareMask = 1UL << (rank * 8 + f);
+            attacks |= squareMask;
+            if ((occupied & squareMask) != 0) break;
+        }
+        
+        // South
+        for (int r = rank - 1; r >= 0; r--)
+        {
+            ulong squareMask = 1UL << (r * 8 + file);
+            attacks |= squareMask;
+            if ((occupied & squareMask) != 0) break;
+        }
+        
+        // West
+        for (int f = file - 1; f >= 0; f--)
+        {
+            ulong squareMask = 1UL << (rank * 8 + f);
+            attacks |= squareMask;
+            if ((occupied & squareMask) != 0) break;
+        }
+        
+        return attacks;
     }
     
     // Efficient bit operations
