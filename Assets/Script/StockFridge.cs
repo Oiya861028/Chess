@@ -12,45 +12,39 @@ public class StockFridge
     private const int TT_EXACT = 0;  // Exact score
     private const int TT_ALPHA = 1;  // Upper bound
     private const int TT_BETA = 2;   // Lower bound
-    
-    // Fixed-size transposition table parameters
-    private const int TT_SIZE = 1024 * 1024 * 4; // 4M entries (power of 2)
-    private const int TT_MASK = TT_SIZE - 1;     // Bit mask for quick indexing
+    private const int MAX_TT_SIZE = 1000000; // Maximum table size
     
     // Quiescence search parameters
     private const int MAX_QUIESCENCE_DEPTH = 4; // Limit how deep quiescence can go
     private const int DELTA_MARGIN = 200; // Delta pruning margin
     
-    // Null Move Pruning parameters
-    private const int NULL_MOVE_REDUCTION = 3; // R value in R=3 null move pruning
-    private const int NULL_MOVE_MIN_DEPTH = 3; // Minimum depth for null move pruning
-    
     // Simple move ordering constants - piece values for MVV-LVA
     private readonly int[] PieceValues = { 0, 100, 320, 330, 500, 900, 20000 }; // None, Pawn, Knight, Bishop, Rook, Queen, King
     
-    // Optimized transposition table
-    private TTEntry[] transpositionTable;
+    // Transposition table and related fields
+    private Dictionary<ulong, TTEntry> transpositionTable;
     private readonly ulong[,,] zobristKeys; // [piece][color][square]
     private ulong sideToMoveKey;
     
     // Node statistics for debugging/tuning
     private int nodesSearched = 0;
     private int qNodesSearched = 0;
-    private int nullMoveCutoffs = 0;
-    private int ttHits = 0;
-    private int ttCollisions = 0;
     
-    // Transposition table entry struct (more memory efficient than class)
-    private struct TTEntry
+    // Transposition table entry class
+    private class TTEntry
     {
-        public ulong Key;         // Full Zobrist hash (for collision detection)
-        public short Depth;       // Search depth
-        public byte Flag;         // Node type (EXACT, ALPHA, BETA)
+        public int Depth;         // Search depth
+        public int Flag;          // Node type (EXACT, ALPHA, BETA)
         public int Value;         // Evaluation score
-        public ushort BestMoveFrom;  // Best move source square
-        public ushort BestMoveTo;    // Best move destination square
-        public byte BestMoveIsWhite; // Flag for move color
-        public byte Age;          // For aging entries across searches
+        public Move BestMove;     // Best move from this position
+        
+        public TTEntry(int depth, int flag, int value, Move bestMove)
+        {
+            Depth = depth;
+            Flag = flag;
+            Value = value;
+            BestMove = bestMove;
+        }
     }
 
     public StockFridge(FindMoves findMoves, Bitboard bitboard)
@@ -58,9 +52,7 @@ public class StockFridge
         this.findMoves = findMoves;
         this.bitboard = bitboard;
         this.evaluation = new Evaluation(); // Initialize the evaluation
-        
-        // Initialize transposition table (fixed size array)
-        this.transpositionTable = new TTEntry[TT_SIZE];
+        this.transpositionTable = new Dictionary<ulong, TTEntry>();
         
         // Initialize Zobrist keys for hashing
         // Use explicit System.Random to avoid ambiguity with UnityEngine.Random
@@ -75,130 +67,6 @@ public class StockFridge
         
         // Generate key for side to move
         sideToMoveKey = ((ulong)rand.Next() << 32) | (ulong)rand.Next();
-        
-        Debug.Log($"Initialized transposition table with {TT_SIZE} entries ({TT_SIZE * sizeof(ulong) / (1024 * 1024)} MB)");
-    }
-    
-    // Clear the transposition table (reset entries)
-    private void ClearTranspositionTable()
-    {
-        Array.Clear(transpositionTable, 0, transpositionTable.Length);
-        Debug.Log("Transposition table cleared");
-    }
-    
-    // Age the transposition table (increment age of all entries)
-    private void AgeTranspositionTable()
-    {
-        byte currentAge = 0;
-        for (int i = 0; i < TT_SIZE; i++)
-        {
-            if (transpositionTable[i].Key != 0) // If entry exists
-            {
-                currentAge = transpositionTable[i].Age;
-                if (currentAge < 255) // Avoid overflow
-                {
-                    transpositionTable[i].Age = (byte)(currentAge + 1);
-                }
-            }
-        }
-    }
-    
-    // Store an entry in the transposition table
-    private void StoreTranspositionEntry(ulong positionHash, int depth, int flag, int value, Move bestMove)
-    {
-        // Index into the table using the lower bits of the hash
-        int index = (int)(positionHash & TT_MASK);
-        
-        // Check if we should replace the existing entry
-        bool replace = false;
-        
-        // Always replace if empty or if same position
-        if (transpositionTable[index].Key == 0 || transpositionTable[index].Key == positionHash)
-        {
-            replace = true;
-        }
-        else
-        {
-            // Replacement strategy: prefer deeper searches or older entries
-            if (transpositionTable[index].Depth <= depth || transpositionTable[index].Age > 1)
-            {
-                replace = true;
-                ttCollisions++;
-            }
-        }
-        
-        if (replace)
-        {
-            TTEntry entry = new TTEntry
-            {
-                Key = positionHash,
-                Depth = (short)depth,
-                Flag = (byte)flag,
-                Value = value,
-                Age = 0 // New entry
-            };
-            
-            // Store best move if available
-            if (bestMove != null)
-            {
-                entry.BestMoveFrom = (ushort)bestMove.Source;
-                entry.BestMoveTo = (ushort)bestMove.Destination;
-                entry.BestMoveIsWhite = (byte)(bestMove.IsWhite ? 1 : 0);
-            }
-            
-            transpositionTable[index] = entry;
-        }
-    }
-    
-    // Probe the transposition table for a position
-    private bool ProbeTranspositionTable(ulong positionHash, int depth, ref int value, ref int flag, ref Move bestMove)
-    {
-        // Index into the table using the lower bits of the hash
-        int index = (int)(positionHash & TT_MASK);
-        
-        TTEntry entry = transpositionTable[index];
-        
-        // Check if this entry is for the current position
-        if (entry.Key == positionHash)
-        {
-            // Found a valid entry
-            ttHits++;
-            
-            // Skip if entry is from a shallower search
-            if (entry.Depth < depth)
-            {
-                // Only use the move, not the score
-                if (entry.BestMoveFrom != 0 || entry.BestMoveTo != 0)
-                {
-                    bestMove = new Move(
-                        (int)entry.BestMoveFrom, 
-                        (int)entry.BestMoveTo, 
-                        null, // No previous move info
-                        0,    // No piece type info (will be determined when needed)
-                        entry.BestMoveIsWhite == 1);
-                }
-                return false;
-            }
-            
-            // Return the stored value and flag
-            value = entry.Value;
-            flag = entry.Flag;
-            
-            // Create best move if available
-            if (entry.BestMoveFrom != 0 || entry.BestMoveTo != 0)
-            {
-                bestMove = new Move(
-                    (int)entry.BestMoveFrom, 
-                    (int)entry.BestMoveTo, 
-                    null, // No previous move info
-                    0,    // No piece type info (will be determined when needed)
-                    entry.BestMoveIsWhite == 1);
-            }
-            
-            return true;
-        }
-        
-        return false;
     }
     
     // Compute Zobrist hash for the current board position
@@ -250,12 +118,13 @@ public class StockFridge
         // Reset node counters
         nodesSearched = 0;
         qNodesSearched = 0;
-        nullMoveCutoffs = 0;
-        ttHits = 0;
-        ttCollisions = 0;
         
-        // Age transposition table entries
-        AgeTranspositionTable();
+        // Clear TT periodically to prevent stale entries accumulating over multiple games
+        if (transpositionTable.Count > MAX_TT_SIZE)
+        {
+            Debug.Log($"Transposition table exceeded size limit ({MAX_TT_SIZE}), clearing...");
+            transpositionTable.Clear();
+        }
         
         // Get all possible moves for the current position
         List<Move> possibleMoves = findMoves.GetAllPossibleMoves(isWhite, previousMove);
@@ -311,38 +180,30 @@ public class StockFridge
         
         // Check transposition table for a stored best move
         ulong currentHash = ComputeHash(isWhite);
-        int ttValue = 0;
-        int ttFlag = 0;
-        Move ttMove = null;
-        
-        if (ProbeTranspositionTable(currentHash, depth, ref ttValue, ref ttFlag, ref ttMove))
+        if (transpositionTable.TryGetValue(currentHash, out TTEntry ttEntry) && 
+            ttEntry.BestMove != null && ttEntry.Depth >= depth)
         {
-            // If we have an exact score from a deep enough search, use it
-            if (ttFlag == TT_EXACT && ttMove != null)
+            // Verify the move is still legal
+            foreach (Move move in legalMoves)
             {
-                // Verify the move is still legal
-                foreach (Move move in legalMoves)
+                if (MovesEqual(move, ttEntry.BestMove))
                 {
-                    if (MovesEqual(move, ttMove))
-                    {
-                        Debug.Log("Using cached best move from transposition table");
-                        return move;
-                    }
+                    Debug.Log("Using cached best move from transposition table");
+                    return move;
                 }
             }
         }
         
         // Sort moves based on simple heuristics (captures score higher)
-        SortMoves(legalMoves, ttMove);
+        SortMoves(legalMoves, ttEntry?.BestMove);
         
-        // For the root node, use a simple alpha-beta search for each move
         foreach (Move move in legalMoves)
         {
             // Make the move
             bitboard.UpdateBitBoard(move);
             
             // Get the value for this move
-            int value = -Negamax(depth - 1, -INFINITY, INFINITY, !isWhite, move, false);
+            int value = -Negamax(depth - 1, -INFINITY, INFINITY, !isWhite, move);
             
             // Undo the move
             bitboard.UndoBitboard();
@@ -355,7 +216,7 @@ public class StockFridge
         }
         
         // Store the result in the transposition table
-        StoreTranspositionEntry(currentHash, depth, TT_EXACT, bestValue, bestMove);
+        transpositionTable[currentHash] = new TTEntry(depth, TT_EXACT, bestValue, bestMove);
         
         // Final verification
         if (bestMove != null && bestMove.IsWhite != isWhite)
@@ -374,14 +235,12 @@ public class StockFridge
         }
         
         // Report nodes searched for performance monitoring
-        Debug.Log($"Search completed: {nodesSearched} regular nodes, {qNodesSearched} quiescence nodes");
-        Debug.Log($"TT stats: {ttHits} hits, {ttCollisions} collisions, usage: {((ttHits + ttCollisions) * 100.0 / TT_SIZE):F2}%");
-        Debug.Log($"Null move cutoffs: {nullMoveCutoffs}");
+        Debug.Log($"Search completed: {nodesSearched} regular nodes, {qNodesSearched} quiescence nodes searched");
         
         return bestMove;
     }
 
-    private int Negamax(int depth, int alpha, int beta, bool isWhite, Move previousMove, bool isNullMove)
+    private int Negamax(int depth, int alpha, int beta, bool isWhite, Move previousMove)
     {
         // Increment node counter
         nodesSearched++;
@@ -390,21 +249,18 @@ public class StockFridge
         ulong positionHash = ComputeHash(isWhite);
         
         // Check transposition table for this position
-        int ttValue = 0;
-        int ttFlag = 0;
-        Move ttMove = null;
-        
-        if (ProbeTranspositionTable(positionHash, depth, ref ttValue, ref ttFlag, ref ttMove))
+        if (transpositionTable.TryGetValue(positionHash, out TTEntry ttEntry) && 
+            ttEntry.Depth >= depth)
         {
-            if (ttFlag == TT_EXACT)
-                return ttValue;
-            else if (ttFlag == TT_ALPHA && ttValue <= alpha)
+            if (ttEntry.Flag == TT_EXACT)
+                return ttEntry.Value;
+            else if (ttEntry.Flag == TT_ALPHA && ttEntry.Value <= alpha)
                 return alpha;
-            else if (ttFlag == TT_BETA && ttValue >= beta)
+            else if (ttEntry.Flag == TT_BETA && ttEntry.Value >= beta)
                 return beta;
         }
         
-        // Check if king is in check - needed for check extension and null move pruning
+        // Check if king is in check - needed for check extension
         bool inCheck = evaluation.IsInCheck(isWhite, 
                                         bitboard.returnWhitePiecesByTypes(), 
                                         bitboard.returnBlackPiecesByTypes(), 
@@ -419,32 +275,6 @@ public class StockFridge
         {
             // Call quiescence search to resolve captures
             return QuiescenceSearch(alpha, beta, isWhite, previousMove);
-        }
-        
-        // Null Move Pruning
-        // Only do this if:
-        // 1. Not in check
-        // 2. Not already in a null move (to avoid consecutive null moves)
-        // 3. At sufficient depth
-        // 4. Position has enough material (have at least some non-pawn pieces)
-        // 5. NOT in a pawn endgame (to avoid zugzwang)
-        if (depth >= NULL_MOVE_MIN_DEPTH && !inCheck && !isNullMove && 
-            HasNonPawnMaterial(isWhite) && !IsPawnEndgame())
-        {
-            // Make a "null move" - skip our turn
-            // No actual move is made on the bitboard, we just switch sides
-            
-            // Try a reduced depth search with a null move
-            int nullValue = -Negamax(depth - 1 - NULL_MOVE_REDUCTION, -beta, -beta + 1, !isWhite, null, true);
-            
-            // If the reduced search fails high, we can prune this branch
-            if (nullValue >= beta)
-            {
-                nullMoveCutoffs++;
-                // Store a lower bound in the transposition table
-                StoreTranspositionEntry(positionHash, depth, TT_BETA, beta, null);
-                return beta; // Return a lower bound on the score
-            }
         }
 
         // Get all possible moves
@@ -481,7 +311,7 @@ public class StockFridge
         }
         
         // Sort moves based on simple heuristics
-        SortMoves(legalMoves, ttMove);
+        SortMoves(legalMoves, ttEntry?.BestMove);
         
         int bestValue = -INFINITY;
         Move bestMove = null;
@@ -493,7 +323,7 @@ public class StockFridge
             bitboard.UpdateBitBoard(move);
             
             // Recursively evaluate position
-            int value = -Negamax(depth - 1, -beta, -alpha, !isWhite, move, false);
+            int value = -Negamax(depth - 1, -beta, -alpha, !isWhite, move);
             
             // Undo the move
             bitboard.UndoBitboard();
@@ -519,48 +349,9 @@ public class StockFridge
         }
 
         // Store position in transposition table
-        StoreTranspositionEntry(positionHash, depth, nodeType, bestValue, bestMove);
+        transpositionTable[positionHash] = new TTEntry(depth, nodeType, bestValue, bestMove);
 
         return bestValue;
-    }
-    
-    // Check if we're in a pawn endgame (kings + pawns only)
-    private bool IsPawnEndgame()
-    {
-        // If we only have kings and pawns, it's a pawn endgame
-        return ((bitboard.WhiteKnight | bitboard.WhiteBishop | 
-                bitboard.WhiteRook | bitboard.WhiteQueen |
-                bitboard.BlackKnight | bitboard.BlackBishop |
-                bitboard.BlackRook | bitboard.BlackQueen) == 0);
-    }
-    
-    // Helper function to count bits in a ulong
-    private int PopCount(ulong x)
-    {
-        int count = 0;
-        while (x != 0)
-        {
-            count++;
-            x &= x - 1; // Clear the least significant bit
-        }
-        return count;
-    }
-    
-    // Helper function to check if side has enough material for null move pruning
-    private bool HasNonPawnMaterial(bool isWhite)
-    {
-        if (isWhite)
-        {
-            // Check if white has any pieces other than pawns and king
-            return (bitboard.WhiteKnight | bitboard.WhiteBishop | 
-                   bitboard.WhiteRook | bitboard.WhiteQueen) != 0;
-        }
-        else
-        {
-            // Check if black has any pieces other than pawns and king
-            return (bitboard.BlackKnight | bitboard.BlackBishop | 
-                   bitboard.BlackRook | bitboard.BlackQueen) != 0;
-        }
     }
     
     // Quiescence Search - resolve tactical sequences at leaf nodes
