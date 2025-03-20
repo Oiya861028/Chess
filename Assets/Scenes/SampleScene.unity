@@ -519,8 +519,8 @@ MonoBehaviour:
   gameMode: 0
   isAIWhite: 0
   isAIBlack: 1
-  whiteAIDepth: 3
-  blackAIDepth: 3
+  whiteAIDepth: 5
+  blackAIDepth: 5
   aiMoveDelay: 0.25
 --- !u!4 &1073159062
 Transform:
