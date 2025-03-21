@@ -563,7 +563,7 @@ public class FindMoves
         
         return legalMoves;
     }
-    private ulong GetPossibleMovesForPiece(int position, PieceType pieceType, bool isWhite)
+    public ulong GetPossibleMovesForPiece(int position, PieceType pieceType, bool isWhite)
     {  
         // Get combined piece bitboards
         ulong allPieces = bitboard.WhitePawn | bitboard.WhiteKnight | bitboard.WhiteBishop | 

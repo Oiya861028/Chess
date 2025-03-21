@@ -11,8 +11,8 @@ public class StockFridge
     private const int MATE_SCORE = 9000000; // Score for checkmate (smaller than INFINITY to allow depth adjustments)
     
     // Quiescence search parameters
-    private const int MAX_QUIESCENCE_DEPTH = 4; // Limit how deep quiescence can go
-    private const int DELTA_MARGIN = 200; // Delta pruning margin
+    private const int MAX_QUIESCENCE_DEPTH = 8; // Increased from 4 to 8
+    private const int DELTA_MARGIN = 120; // Reduced from 200 to 120 to be more selective
     
     // Simple move ordering constants - piece values for MVV-LVA
     private readonly int[] PieceValues = { 0, 100, 320, 330, 500, 900, 20000 }; // None, Pawn, Knight, Bishop, Rook, Queen, King
@@ -437,7 +437,7 @@ public class StockFridge
             // Make the move
             bitboard.UpdateBitBoard(move);
             
-            int value =0;
+            int value = 0;
             
             // Late Move Reduction
             if (fullDepthSearch && !inCheck && !IsMoveCapture(move) && depth >= 3 && movesSearched >= 3)
@@ -527,11 +527,15 @@ public class StockFridge
             return (bitboard.BlackKnight | bitboard.BlackBishop | bitboard.BlackRook | bitboard.BlackQueen) != 0;
     }
     
-    // Quiescence Search - resolve tactical sequences at leaf nodes
+    // Improved Quiescence Search - resolve tactical sequences at leaf nodes
     private int QuiescenceSearch(int alpha, int beta, bool isWhite, Move previousMove, int ply)
     {
         // Increment quiescence node counter
         qNodesSearched++;
+        
+        // Check maximum depth (bumped up from 4 to 8)
+        if (ply >= 8)
+            return EvaluatePosition(isWhite);
         
         // First, get the stand-pat score (evaluate current position)
         int standPat = EvaluatePosition(isWhite);
@@ -544,23 +548,25 @@ public class StockFridge
         if (standPat > alpha)
             alpha = standPat;
             
-        // Limit quiescence search depth to avoid excessive searching
-        if (ply >= MAX_QUIESCENCE_DEPTH)
-            return standPat;
-            
         // Get only capture moves
         List<Move> captureMoves = GenerateCaptureMoves(isWhite, previousMove);
         
-        // Sort captures by MVV-LVA
+        // Sort captures by MVV-LVA and SEE
         SortMoves(captureMoves, null);
         
         foreach (Move move in captureMoves)
         {
-            // Delta pruning - skip if even the best capture + margin can't improve alpha
+            // Get the Static Exchange Evaluation for this capture
             int captureValue = EstimateCaptureValue(move);
-            if (standPat + captureValue + DELTA_MARGIN <= alpha)
+            
+            // Skip bad captures (negative SEE) in quiescence
+            if (captureValue < 0)
                 continue;
                 
+            // Delta pruning (if a capture couldn't possibly improve alpha even with a good margin)
+            if (standPat + captureValue + DELTA_MARGIN <= alpha)
+                continue;
+                    
             // Make the capture move
             bitboard.UpdateBitBoard(move);
             
@@ -613,7 +619,7 @@ public class StockFridge
         return captureMoves;
     }
     
-    // Enhanced move ordering - prioritize captures, TT moves, killers, and history
+    // Improved move ordering - prioritize captures, TT moves, killers, and history
     private void SortMoves(List<Move> moves, Move ttMove, int ply = 0)
     {
         Dictionary<Move, int> moveScores = new Dictionary<Move, int>();
@@ -627,11 +633,21 @@ public class StockFridge
             {
                 score = 10000000;
             }
-            // Second priority: Captures ordered by MVV-LVA
+            // Second priority: Good captures based on SEE
             else if (IsMoveCapture(move))
             {
-                // MVV-LVA (Most Valuable Victim - Least Valuable Attacker)
-                score = 1000000 + EstimateCaptureValue(move);
+                // Use improved EstimateCaptureValue which considers SEE
+                int captureValue = EstimateCaptureValue(move);
+                
+                // Winning captures get high priority
+                if (captureValue > 0)
+                    score = 1000000 + captureValue;
+                // Equal captures get medium priority
+                else if (captureValue == 0)
+                    score = 500000;
+                // Losing captures get lower priority but still above non-captures
+                else
+                    score = 200000 + captureValue; // This will be less than 200000 for bad captures
             }
             // Third priority: Killer moves
             else if (ply < MAX_DEPTH && killerMoves[0, ply] != null && MovesEqual(move, killerMoves[0, ply]))
@@ -647,6 +663,11 @@ public class StockFridge
             {
                 score = 700000 + move.PromotionPieceType;
             }
+            // Fifth priority: Checks
+            else if (MoveGivesCheck(move))
+            {
+                score = 600000;
+            }
             // Last priority: History heuristic
             else
             {
@@ -659,11 +680,234 @@ public class StockFridge
         // Sort moves by score (descending)
         moves.Sort((a, b) => moveScores[b].CompareTo(moveScores[a]));
     }
-    
-    // Overload for quiescence search (no ply parameter)
-    private void SortMoves(List<Move> moves, Move ttMove)
+
+    // Helper method to determine if a move gives check
+    private bool MoveGivesCheck(Move move)
     {
-        SortMoves(moves, ttMove, 0);
+        // Make the move on a temporary board
+        bitboard.UpdateBitBoard(move);
+        
+        // Check if the opponent's king is in check
+        bool givesCheck = evaluation.IsInCheck(!move.IsWhite, 
+                                        bitboard.returnWhitePiecesByTypes(), 
+                                        bitboard.returnBlackPiecesByTypes(), 
+                                        bitboard.returnAllPieces());
+        
+        // Undo the move
+        bitboard.UndoBitboard();
+        
+        return givesCheck;
+    }
+    
+    // Static Exchange Evaluation (SEE) - determines the outcome of a capture sequence
+    private int StaticExchangeEvaluation(int square, bool sideToMove, int capturedPieceType)
+    {
+        // If no piece is captured, SEE is 0
+        if (capturedPieceType == 0) 
+            return 0;
+            
+        int gain = PieceValues[capturedPieceType]; // Value of the captured piece
+        
+        // Find the least valuable attacker for the current side
+        int attackingPieceType = GetLeastValuableAttacker(square, sideToMove, out int fromSquare);
+        
+        // If no attacker is found, return 0 (no capture possible)
+        if (attackingPieceType == 0)
+            return 0;
+            
+        // Make the capture on a temporary copy of the bitboard
+        ulong originalPiece = 0;
+        int originalPieceType = 0;
+        bool captureFound = false;
+        
+        // Store the original state
+        if (sideToMove) // White's move
+        {
+            // Check which black piece is on the square
+            ulong squareMask = 1UL << square;
+            if ((bitboard.BlackPawn & squareMask) != 0) { originalPiece = bitboard.BlackPawn; originalPieceType = (int)PieceType.Pawn; captureFound = true; }
+            else if ((bitboard.BlackKnight & squareMask) != 0) { originalPiece = bitboard.BlackKnight; originalPieceType = (int)PieceType.Knight; captureFound = true; }
+            else if ((bitboard.BlackBishop & squareMask) != 0) { originalPiece = bitboard.BlackBishop; originalPieceType = (int)PieceType.Bishop; captureFound = true; }
+            else if ((bitboard.BlackRook & squareMask) != 0) { originalPiece = bitboard.BlackRook; originalPieceType = (int)PieceType.Rook; captureFound = true; }
+            else if ((bitboard.BlackQueen & squareMask) != 0) { originalPiece = bitboard.BlackQueen; originalPieceType = (int)PieceType.Queen; captureFound = true; }
+            else if ((bitboard.BlackKing & squareMask) != 0) { originalPiece = bitboard.BlackKing; originalPieceType = (int)PieceType.King; captureFound = true; }
+        }
+        else // Black's move
+        {
+            // Check which white piece is on the square
+            ulong squareMask = 1UL << square;
+            if ((bitboard.WhitePawn & squareMask) != 0) { originalPiece = bitboard.WhitePawn; originalPieceType = (int)PieceType.Pawn; captureFound = true; }
+            else if ((bitboard.WhiteKnight & squareMask) != 0) { originalPiece = bitboard.WhiteKnight; originalPieceType = (int)PieceType.Knight; captureFound = true; }
+            else if ((bitboard.WhiteBishop & squareMask) != 0) { originalPiece = bitboard.WhiteBishop; originalPieceType = (int)PieceType.Bishop; captureFound = true; }
+            else if ((bitboard.WhiteRook & squareMask) != 0) { originalPiece = bitboard.WhiteRook; originalPieceType = (int)PieceType.Rook; captureFound = true; }
+            else if ((bitboard.WhiteQueen & squareMask) != 0) { originalPiece = bitboard.WhiteQueen; originalPieceType = (int)PieceType.Queen; captureFound = true; }
+            else if ((bitboard.WhiteKing & squareMask) != 0) { originalPiece = bitboard.WhiteKing; originalPieceType = (int)PieceType.King; captureFound = true; }
+        }
+        
+        if (!captureFound)
+            return 0; // No piece to capture!
+        
+        // Make the capture on a temporary bitboard copy
+        Move captureMove = new Move(fromSquare, square, null, attackingPieceType, sideToMove);
+        bitboard.UpdateBitBoard(captureMove);
+        
+        // Recursively call SEE to evaluate the next capture in the sequence
+        // But negate the result since it's from the opponent's perspective
+        int recursiveValue = -StaticExchangeEvaluation(square, !sideToMove, attackingPieceType);
+        
+        // Restore the board
+        bitboard.UndoBitboard();
+        
+        // If the recursive capture is better for the opponent, don't make this capture
+        if (recursiveValue > gain)
+            return 0;
+            
+        // Otherwise, return the material gain from this capture minus the opponent's gain
+        return gain - recursiveValue;
+    }
+
+    // Find the least valuable attacker to a square
+    private int GetLeastValuableAttacker(int square, bool sideToMove, out int fromSquare)
+    {
+        fromSquare = -1;
+        
+        // Get all pieces from the side to move
+        ulong ownPawns = sideToMove ? bitboard.WhitePawn : bitboard.BlackPawn;
+        ulong ownKnights = sideToMove ? bitboard.WhiteKnight : bitboard.BlackKnight;
+        ulong ownBishops = sideToMove ? bitboard.WhiteBishop : bitboard.BlackBishop;
+        ulong ownRooks = sideToMove ? bitboard.WhiteRook : bitboard.BlackRook;
+        ulong ownQueens = sideToMove ? bitboard.WhiteQueen : bitboard.BlackQueen;
+        ulong ownKing = sideToMove ? bitboard.WhiteKing : bitboard.BlackKing;
+        
+        // Create attackers mask for each piece type
+        ulong pawnAttackers = 0;
+        ulong knightAttackers = 0;
+        ulong bishopAttackers = 0;
+        ulong rookAttackers = 0;
+        ulong queenAttackers = 0;
+        ulong kingAttackers = 0;
+        
+        // Check for pawn attackers
+        if (sideToMove) // White's turn
+        {
+            // White pawns attack diagonally up-left and up-right
+            if (square >= 9 && square % 8 > 0) // Check up-left (from white's view)
+                pawnAttackers |= ownPawns & (1UL << (square - 9));
+                
+            if (square >= 7 && square % 8 < 7) // Check up-right (from white's view)
+                pawnAttackers |= ownPawns & (1UL << (square - 7));
+        }
+        else // Black's turn
+        {
+            // Black pawns attack diagonally down-left and down-right
+            if (square <= 54 && square % 8 > 0) // Check down-left (from black's view)
+                pawnAttackers |= ownPawns & (1UL << (square + 7));
+                
+            if (square <= 56 && square % 8 < 7) // Check down-right (from black's view)
+                pawnAttackers |= ownPawns & (1UL << (square + 9));
+        }
+        
+        // Check for knight attackers using FindMoves methods
+        ulong knightAttacks = findMoves.GetPossibleMovesForPiece(square, PieceType.Knight, !sideToMove);
+        knightAttackers = knightAttacks & ownKnights;
+        
+        // Check for bishop/queen attackers on diagonals
+        ulong allPieces = bitboard.returnAllPieces();
+        ulong bishopAttacks = findMoves.GetPossibleMovesForPiece(square, PieceType.Bishop, !sideToMove);
+        bishopAttackers = bishopAttacks & ownBishops;
+        
+        // Check for rook/queen attackers on files/ranks
+        ulong rookAttacks = findMoves.GetPossibleMovesForPiece(square, PieceType.Rook, !sideToMove);
+        rookAttackers = rookAttacks & ownRooks;
+        
+        // Get queen attackers (using both bishop and rook attacks)
+        queenAttackers = (bishopAttacks | rookAttacks) & ownQueens;
+        
+        // Check for king attackers
+        ulong kingAttacks = findMoves.GetPossibleMovesForPiece(square, PieceType.King, !sideToMove);
+        kingAttackers = kingAttacks & ownKing;
+        
+        // Now select the least valuable attacker in order: pawn, knight, bishop, rook, queen, king
+        if (pawnAttackers != 0)
+        {
+            fromSquare = BitOperations.TrailingZeroCount(pawnAttackers);
+            return (int)PieceType.Pawn;
+        }
+        if (knightAttackers != 0)
+        {
+            fromSquare = BitOperations.TrailingZeroCount(knightAttackers);
+            return (int)PieceType.Knight;
+        }
+        if (bishopAttackers != 0)
+        {
+            fromSquare = BitOperations.TrailingZeroCount(bishopAttackers);
+            return (int)PieceType.Bishop;
+        }
+        if (rookAttackers != 0)
+        {
+            fromSquare = BitOperations.TrailingZeroCount(rookAttackers);
+            return (int)PieceType.Rook;
+        }
+        if (queenAttackers != 0)
+        {
+            fromSquare = BitOperations.TrailingZeroCount(queenAttackers);
+            return (int)PieceType.Queen;
+        }
+        if (kingAttackers != 0)
+        {
+            fromSquare = BitOperations.TrailingZeroCount(kingAttackers);
+            return (int)PieceType.King;
+        }
+        
+        // No attacker found
+        return 0;
+    }
+    
+    // Improved Capture Value Estimation with SEE
+    private int EstimateCaptureValue(Move move)
+    {
+        if (move == null) return 0;
+        
+        int capturedPieceType = 0;
+        ulong destBit = 1UL << move.Destination;
+        
+        // Determine captured piece type
+        if (move.IsWhite)
+        {
+            // Check which black piece is being captured
+            if ((destBit & bitboard.BlackPawn) != 0) capturedPieceType = 1; // PAWN
+            else if ((destBit & bitboard.BlackKnight) != 0) capturedPieceType = 2; // KNIGHT
+            else if ((destBit & bitboard.BlackBishop) != 0) capturedPieceType = 3; // BISHOP
+            else if ((destBit & bitboard.BlackRook) != 0) capturedPieceType = 4; // ROOK
+            else if ((destBit & bitboard.BlackQueen) != 0) capturedPieceType = 5; // QUEEN
+            else if (move.IsEnPassant) capturedPieceType = 1; // En passant captures a pawn
+        }
+        else
+        {
+            // Check which white piece is being captured
+            if ((destBit & bitboard.WhitePawn) != 0) capturedPieceType = 1; // PAWN
+            else if ((destBit & bitboard.WhiteKnight) != 0) capturedPieceType = 2; // KNIGHT
+            else if ((destBit & bitboard.WhiteBishop) != 0) capturedPieceType = 3; // BISHOP
+            else if ((destBit & bitboard.WhiteRook) != 0) capturedPieceType = 4; // ROOK
+            else if ((destBit & bitboard.WhiteQueen) != 0) capturedPieceType = 5; // QUEEN
+            else if (move.IsEnPassant) capturedPieceType = 1; // En passant captures a pawn
+        }
+        
+        // If it's not a capture, return 0
+        if (capturedPieceType == 0) return 0;
+        
+        // Use Static Exchange Evaluation to determine the true value of this capture
+        int seeValue = StaticExchangeEvaluation(move.Destination, move.IsWhite, capturedPieceType);
+        
+        // Make sure the score is positive even for equal exchanges (to encourage simplification)
+        if (seeValue == 0) seeValue = 1;
+        
+        // Heavily penalize negative SEE values (bad captures)
+        if (seeValue < 0) return seeValue * 2;
+        
+        // Still use MVV-LVA for move ordering when SEE is positive
+        // This ensures we try capturing a queen with a pawn before capturing with a knight
+        return (capturedPieceType * 100) - move.PieceType + seeValue;
     }
     
     // Determine if a move is a capture by using the bitboard
@@ -676,50 +920,13 @@ public class StockFridge
         if (move.IsWhite)
         {
             // For white, see if there's a black piece at the destination
-            return (destBit & bitboard.returnAllBlackPieces()) != 0;
+            return (destBit & bitboard.returnAllBlackPieces()) != 0 || move.IsEnPassant;
         }
         else
         {
             // For black, see if there's a white piece at the destination
-            return (destBit & bitboard.returnAllWhitePieces()) != 0;
+            return (destBit & bitboard.returnAllWhitePieces()) != 0 || move.IsEnPassant;
         }
-    }
-    
-    // Improved capture value estimation for move ordering
-    private int EstimateCaptureValue(Move move)
-    {
-        if (move == null) return 0;
-        
-        int score = 0;
-        ulong destBit = 1UL << move.Destination;
-        
-        // Determine captured piece value (MVV - Most Valuable Victim)
-        if (move.IsWhite)
-        {
-            // Check which black piece is being captured
-            if ((destBit & bitboard.BlackPawn) != 0) score = PieceValues[1];
-            else if ((destBit & bitboard.BlackKnight) != 0) score = PieceValues[2];
-            else if ((destBit & bitboard.BlackBishop) != 0) score = PieceValues[3];
-            else if ((destBit & bitboard.BlackRook) != 0) score = PieceValues[4];
-            else if ((destBit & bitboard.BlackQueen) != 0) score = PieceValues[5];
-            else if (move.IsEnPassant) score = PieceValues[1]; // En passant captures a pawn
-        }
-        else
-        {
-            // Check which white piece is being captured
-            if ((destBit & bitboard.WhitePawn) != 0) score = PieceValues[1];
-            else if ((destBit & bitboard.WhiteKnight) != 0) score = PieceValues[2];
-            else if ((destBit & bitboard.WhiteBishop) != 0) score = PieceValues[3];
-            else if ((destBit & bitboard.WhiteRook) != 0) score = PieceValues[4];
-            else if ((destBit & bitboard.WhiteQueen) != 0) score = PieceValues[5];
-            else if (move.IsEnPassant) score = PieceValues[1]; // En passant captures a pawn
-        }
-        
-        // LVA (Least Valuable Attacker) - subtract a value based on capturing piece type
-        // Multiply by 10 to ensure victim value always outweighs attacker value
-        score = score * 10 - move.PieceType;
-        
-        return score;
     }
     
     private int EvaluatePosition(bool isWhite)
@@ -733,7 +940,7 @@ public class StockFridge
             isWhite);
     }
     
-    // Helper method to compare moves - updated to match your Move class
+    // Helper method to compare moves
     private bool MovesEqual(Move a, Move b)
     {
         if (a == null || b == null) return false;

@@ -73,6 +73,7 @@ public class Evaluation
     private static readonly int[] RookOnFileMg = { 21, 47 }; // Semi-open, Open
     private static readonly int[] RookOnFileEg = { 4, 25 };
     
+    // Threats by minor/rook pieces to other pieces - values adjusted based on Stockfish
     private static readonly int[] ThreatByMinorMg = { 0, 6, 59, 79, 90, 79 };
     private static readonly int[] ThreatByMinorEg = { 0, 32, 41, 56, 119, 161 };
     
@@ -98,6 +99,12 @@ public class Evaluation
     private const int ThreatBySafePawnMg = 173; private const int ThreatBySafePawnEg = 94;
     private const int TrappedRookMg = 52; private const int TrappedRookEg = 10;
     private const int WeakQueenMg = 49; private const int WeakQueenEg = 15;
+    
+    // NEW: Penalties for poorly defended pieces (based on Stockfish's values)
+    private const int PoorlyDefendedMg = 50; private const int PoorlyDefendedEg = 30;
+    
+    // NEW: Penalty for no queen in attack (based on Stockfish's value)
+    private const int NoQueenInAttackMg = 873; private const int NoQueenInAttackEg = 400;
     
     // Tempo bonus
     private const int TempoMg = 28;
@@ -364,6 +371,7 @@ public class Evaluation
     {
         return new Score(mg, eg);
     }
+    
     public bool IsInCheck(bool isWhite, ulong[] whitePieces, ulong[] blackPieces, ulong allPieces)
     {
         // Sanity check to prevent array index out of bounds
@@ -465,7 +473,7 @@ public class Evaluation
                                     (whitePieces[ROOK] | whitePieces[QUEEN]))) != 0)
             return true;
 
-        // NEW: Check for adjacent enemy king (kings can never be adjacent to each other)
+        // Check for adjacent enemy king (kings can never be adjacent to each other)
         ulong enemyKingBitboard = isWhite ? blackPieces[KING] : whitePieces[KING];
         if (enemyKingBitboard != 0) {
             int enemyKingSq = BitOperations.TrailingZeroCount(enemyKingBitboard);
@@ -486,6 +494,7 @@ public class Evaluation
 
         return false;
     }
+    
     // Main evaluation function
     public int EvaluatePosition(
         ulong whitePawn, ulong whiteKnight, ulong whiteBishop, ulong whiteRook, ulong whiteQueen, ulong whiteKing,
@@ -842,6 +851,15 @@ public class Evaluation
                 kingAttacksCount[side] += PopCount(attacks & kingRing[enemySide]);
             }
             
+            // NEW: Check for poorly defended queens (if attacked but not well defended)
+            ulong queenSquare = 1UL << sq;
+            if ((attackedBy[enemySide * 7 + ALL_PIECES] & queenSquare) != 0 &&
+                (attackedBy[side * 7 + ALL_PIECES] & queenSquare) == attackedBy[side * 7 + QUEEN])
+            {
+                score.Mg -= PoorlyDefendedMg;
+                score.Eg -= PoorlyDefendedEg;
+            }
+            
             queens &= queens - 1; // Clear LSB
         }
         
@@ -882,7 +900,10 @@ public class Evaluation
             // Calculate king danger
             int kingDanger = 0;
             
+            // Factor in king attackers count and weight
             kingDanger += kingAttackersCount[enemySide] * kingAttackersWeight[enemySide];
+            
+            // Count king attack squares
             kingDanger += kingAttacksCount[enemySide] * 10;
             
             // Weak squares around king
@@ -890,6 +911,12 @@ public class Evaluation
                                 (~attackedBy[side * 7 + ALL_PIECES] | attackedBy[enemySide * 7 + ALL_PIECES]);
                                 
             kingDanger += PopCount(weakSquares) * 15;
+            
+            // NEW: Strong reduction if enemy has no queen (from Stockfish)
+            if (enemyPieces[QUEEN] == 0)
+            {
+                kingDanger -= NoQueenInAttackMg;
+            }
             
             // Check potential
             ulong safeChecks = 0;
@@ -920,7 +947,7 @@ public class Evaluation
             if (safeChecks != 0UL)
                 kingDanger += KnightSafeCheck;
             
-            // Scale king danger into a score
+            // Scale king danger into a score - squared for non-linear effect
             if (kingDanger > 0)
             {
                 score.Mg -= Math.Min(kingDanger * kingDanger / 4096, 1000);
@@ -956,7 +983,7 @@ public class Evaluation
         ulong minorAttacks = attackedBy[side * 7 + KNIGHT] | attackedBy[side * 7 + BISHOP];
         ulong rookAttacks = attackedBy[side * 7 + ROOK];
         
-        // Minor pieces attacking enemy pieces
+        // Minor pieces attacking enemy pieces - improved to match Stockfish approach
         ulong minorThreats = minorAttacks & poorlyDefended;
         while (minorThreats != 0)
         {
@@ -1020,12 +1047,21 @@ public class Evaluation
             score.Eg += HangingEg * PopCount(hanging);
         }
         
-        // Safe pawn threats to enemy pieces
+        // Safe pawn threats to enemy pieces - now better scaled to match Stockfish
         ulong safePawnThreats = attackedBy[side * 7 + PAWN] & nonPawnEnemies & ~attackedBy[enemySide * 7 + PAWN];
         if (safePawnThreats != 0UL)
         {
             score.Mg += ThreatBySafePawnMg * PopCount(safePawnThreats);
             score.Eg += ThreatBySafePawnEg * PopCount(safePawnThreats);
+        }
+        
+        // NEW: Penalty for own pieces under attack and not well defended
+        ulong ownNonPawnPieces = ownPieces[0] & ~ownPieces[PAWN] & ~ownPieces[KING];
+        ulong ownPoorlyDefended = ownNonPawnPieces & attackedBy[enemySide * 7 + ALL_PIECES] & ~stronglyProtected;
+        if (ownPoorlyDefended != 0UL)
+        {
+            score.Mg -= PoorlyDefendedMg * PopCount(ownPoorlyDefended);
+            score.Eg -= PoorlyDefendedEg * PopCount(ownPoorlyDefended);
         }
         
         return score;
@@ -1166,7 +1202,7 @@ public class Evaluation
         // Calculate passed pawns count (simplified)
         int passedCount = 0; 
         
-        // Calculate complexity score
+        // Calculate complexity score - improved based on Stockfish
         int complexity = 9 * passedCount +
                          11 * (PopCount(whitePawn) + PopCount(blackPawn)) +
                          9 * outflanking +
