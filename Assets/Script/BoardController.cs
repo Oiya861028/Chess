@@ -68,13 +68,6 @@ public class BoardController : MonoBehaviour
 
     void Start()
     {
-        // Load settings from PlayerPrefs
-        gameMode = (GameMode)PlayerPrefs.GetInt("GameMode", 0);
-        isAIWhite = PlayerPrefs.GetInt("IsAIWhite", 0) == 1;
-        isAIBlack = PlayerPrefs.GetInt("IsAIBlack", 1) == 1;
-        whiteAIDepth = blackAIDepth = PlayerPrefs.GetInt("AIDepth", 4);
-
-        
         bitboard = new Bitboard();
         previousMove = null;
         evaluation = new Evaluation(); // Initialize the evaluation object
