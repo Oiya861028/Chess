@@ -7,7 +7,9 @@ public class FindMoves
     private Bitboard bitboard;
     private Evaluation evaluation;
     private Move previousMove;
-    // Updated constants for the correct bit positions
+    private MagicBitboards magicBitboards; // Added magic bitboards
+    
+    // Constants for the correct bit positions
     private const int WHITE_KING_START = 3;     // e1
     private const int BLACK_KING_START = 59;    // e8
     private const int WHITE_KINGSIDE_ROOK_START = 0;  // h1
@@ -23,7 +25,8 @@ public class FindMoves
         this.bitboard = bitboard;
         this.evaluation = new Evaluation();
         this.previousMove = null; 
-        Debug.Log("FindMoves initialized with bitboard");
+        this.magicBitboards = new MagicBitboards(); // Initialize magic bitboards
+        Debug.Log("FindMoves initialized with bitboard and magic bitboards");
     }
 
     public void SetPreviousMove(Move move)
@@ -36,7 +39,6 @@ public class FindMoves
     }
 
     /// Gets all legal moves for the specified side
-
     public List<Move> GetAllPossibleMoves(bool isWhite, Move previousMove)
     {
         if (debugMode) Debug.Log("GetAllPossibleMoves called for " + (isWhite ? "white" : "black"));
@@ -298,37 +300,6 @@ public class FindMoves
             }
         }
     }
-    
-
-    // Adds moves for all pieces of a specific type
-
-    private void AddMovesForPieceType(List<Move> moves, ulong pieceBitboard, int pieceType, bool isWhite, Move previousMove)
-    {
-        // Process each piece of this type
-        while (pieceBitboard != 0)
-        {
-            // Find position of least significant bit (first piece)
-            int piecePosition = BitOperations.TrailingZeroCount(pieceBitboard);
-            
-            // Remove this piece for next iteration
-            pieceBitboard &= ~(1UL << piecePosition);
-            
-            if (debugMode) Debug.Log($"Generating moves for {(PieceType)pieceType} at position {piecePosition} ({GetSquareName(piecePosition)})");
-            
-            // Generate moves for this piece
-            ulong moveBitboard = GetPossibleMovesForPiece(piecePosition, (PieceType)pieceType, isWhite);
-            
-            // Convert bits to Move objects
-            for (int i = 0; i < 64; i++)
-            {
-                if ((moveBitboard & (1UL << i)) != 0)
-                {
-                    if (debugMode) Debug.Log($"  - Move to {GetSquareName(i)}");
-                    moves.Add(new Move(piecePosition, i, previousMove, pieceType, isWhite));
-                }
-            }
-        }
-    }
    
     private List<Move> FilterLegalMoves(List<Move> moves, bool isWhite)
     {
@@ -463,6 +434,7 @@ public class FindMoves
         
         return foundPinner;
     }
+    
     public ulong GetPossibleMoves(int position)
     {
         // Determine what piece is at this position
@@ -563,25 +535,13 @@ public class FindMoves
         
         return legalMoves;
     }
+    
     public ulong GetPossibleMovesForPiece(int position, PieceType pieceType, bool isWhite)
     {  
         // Get combined piece bitboards
-        ulong allPieces = bitboard.WhitePawn | bitboard.WhiteKnight | bitboard.WhiteBishop | 
-                        bitboard.WhiteRook | bitboard.WhiteQueen | bitboard.WhiteKing |
-                        bitboard.BlackPawn | bitboard.BlackKnight | bitboard.BlackBishop |
-                        bitboard.BlackRook | bitboard.BlackQueen | bitboard.BlackKing;
-                        
-        ulong ownPieces = isWhite ? 
-            (bitboard.WhitePawn | bitboard.WhiteKnight | bitboard.WhiteBishop | 
-            bitboard.WhiteRook | bitboard.WhiteQueen | bitboard.WhiteKing) :
-            (bitboard.BlackPawn | bitboard.BlackKnight | bitboard.BlackBishop |
-            bitboard.BlackRook | bitboard.BlackQueen | bitboard.BlackKing);
-            
-        ulong enemyPieces = isWhite ?
-            (bitboard.BlackPawn | bitboard.BlackKnight | bitboard.BlackBishop |
-            bitboard.BlackRook | bitboard.BlackQueen | bitboard.BlackKing) :
-            (bitboard.WhitePawn | bitboard.WhiteKnight | bitboard.WhiteBishop |
-            bitboard.WhiteRook | bitboard.WhiteQueen | bitboard.WhiteKing);
+        ulong allPieces = bitboard.returnAllPieces();
+        ulong ownPieces = isWhite ? bitboard.returnAllWhitePieces() : bitboard.returnAllBlackPieces();
+        ulong enemyPieces = isWhite ? bitboard.returnAllBlackPieces() : bitboard.returnAllWhitePieces();
         
         // Get basic moves based on piece type
         ulong moves = 0;
@@ -596,13 +556,16 @@ public class FindMoves
                 moves = CalculateKnightMoves(position, ownPieces);
                 break;
             case PieceType.Bishop:
-                moves = CalculateBishopMoves(position, allPieces, ownPieces);
+                // Use magic bitboards for bishops
+                moves = magicBitboards.GetBishopAttacks(position, allPieces) & ~ownPieces;
                 break;
             case PieceType.Rook:
-                moves = CalculateRookMoves(position, allPieces, ownPieces);
+                // Use magic bitboards for rooks
+                moves = magicBitboards.GetRookAttacks(position, allPieces) & ~ownPieces;
                 break;
             case PieceType.Queen:
-                moves = CalculateQueenMoves(position, allPieces, ownPieces);
+                // Use magic bitboards for queens
+                moves = magicBitboards.GetQueenAttacks(position, allPieces) & ~ownPieces;
                 break;
             case PieceType.King:
                 moves = CalculateKingMoves(position, ownPieces);
@@ -860,6 +823,7 @@ public class FindMoves
         
         return moves;
     }
+    
     private ulong CalculatePawnMoves(int position, bool isWhite, ulong allPieces, ulong ownPieces, ulong enemyPieces)
     {
         ulong moves = 0;
@@ -1029,114 +993,6 @@ public class FindMoves
         return knightMoves;
     }
 
-    // Calculate possible bishop moves
-    private ulong CalculateBishopMoves(int position, ulong allPieces, ulong ownPieces)
-    {
-        ulong moves = 0;
-        int rank = position / 8;
-        int file = position % 8;
-        
-        // The four diagonal directions
-        int[][] directions = {
-            new int[] { 1, 1 },   // Up-right
-            new int[] { 1, -1 },  // Up-left
-            new int[] { -1, 1 },  // Down-right
-            new int[] { -1, -1 }  // Down-left
-        };
-        
-        foreach (int[] dir in directions)
-        {
-            int newRank = rank;
-            int newFile = file;
-            
-            // Continue in this direction until we hit a piece or the edge of the board
-            while (true)
-            {
-                newRank += dir[0];
-                newFile += dir[1];
-                
-                // Check if we're still on the board
-                if (newRank < 0 || newRank >= 8 || newFile < 0 || newFile >= 8)
-                    break;
-                
-                int newPosition = newRank * 8 + newFile;
-                ulong newPositionBit = 1UL << newPosition;
-                
-                // If the square is occupied by our own piece, we can't move here
-                if ((ownPieces & newPositionBit) != 0)
-                    break;
-                
-                // Add this move
-                moves |= newPositionBit;
-                
-                // If the square is occupied by any piece, we can't move past it
-                if ((allPieces & newPositionBit) != 0)
-                    break;
-            }
-        }
-        
-        return moves;
-    }
-
-
-    // Calculate possible rook moves
-    private ulong CalculateRookMoves(int position, ulong allPieces, ulong ownPieces)
-    {
-        ulong moves = 0;
-        int rank = position / 8;
-        int file = position % 8;
-        
-        // The four orthogonal directions
-        int[][] directions = {
-            new int[] { 1, 0 },   // Up
-            new int[] { -1, 0 },  // Down
-            new int[] { 0, 1 },   // Right
-            new int[] { 0, -1 }   // Left
-        };
-        
-        foreach (int[] dir in directions)
-        {
-            int newRank = rank;
-            int newFile = file;
-            
-            // Continue in this direction until we hit a piece or the edge of the board
-            while (true)
-            {
-                newRank += dir[0];
-                newFile += dir[1];
-                
-                // Check if we're still on the board
-                if (newRank < 0 || newRank >= 8 || newFile < 0 || newFile >= 8)
-                    break;
-                
-                int newPosition = newRank * 8 + newFile;
-                ulong newPositionBit = 1UL << newPosition;
-                
-                // If the square is occupied by our own piece, we can't move here
-                if ((ownPieces & newPositionBit) != 0)
-                    break;
-                
-                // Add this move
-                moves |= newPositionBit;
-                
-                // If the square is occupied by any piece, we can't move past it
-                if ((allPieces & newPositionBit) != 0)
-                    break;
-            }
-        }
-        
-        return moves;
-    }
-
-
-    // Calculate possible queen moves (combines bishop and rook moves)
-    private ulong CalculateQueenMoves(int position, ulong allPieces, ulong ownPieces)
-    {
-        return CalculateBishopMoves(position, allPieces, ownPieces) | 
-               CalculateRookMoves(position, allPieces, ownPieces);
-    }
-
-
     // Calculate possible king moves
     private ulong CalculateKingMoves(int position, ulong ownPieces)
     {
@@ -1171,13 +1027,13 @@ public class FindMoves
         
         return moves;
     }
+    
     private string GetSquareName(int position)
     {
         return BitboardUtils.IndexToAlgebraic(position);
     }
     
     /// Helper method to find the trailing zero count in a 64-bit integer
-
     private static class BitOperations
     {
         public static int TrailingZeroCount(ulong value)

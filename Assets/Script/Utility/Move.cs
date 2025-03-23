@@ -9,7 +9,7 @@ public class Move
     public bool IsPawnDoubleMove { get; private set; }
     public bool IsPromotion { get; private set; }          // New field for promotion
     public int PromotionPieceType { get; private set; }    // New field for promotion piece type
-
+    public int Score { get; set; }
     // Constructor without promotion parameters
     public Move(int source, int destination, Move previousMove, int pieceType, bool isWhite, bool isEnPassant = false, bool isPawnDoubleMove = false)
     {

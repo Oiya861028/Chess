@@ -3,6 +3,7 @@ using UnityEngine;
 
 public class Evaluation
 {
+    MagicBitboards magicBitboards;
     // Piece values for middlegame and endgame
     private static readonly int[] PieceValueMg = { 0, 126, 781, 825, 1276, 2538 }; // None, Pawn, Knight, Bishop, Rook, Queen
     private static readonly int[] PieceValueEg = { 0, 208, 854, 915, 1380, 2682 }; // None, Pawn, Knight, Bishop, Rook, Queen
@@ -167,6 +168,7 @@ public class Evaluation
     public Evaluation()
     {
         InitializeAttackTables();
+        this.magicBitboards = new MagicBitboards();
     }
     
     public void InitializeAttackTables()
@@ -279,91 +281,19 @@ public class Evaluation
     // Calculate bishop attacks (simplified - no blocking pieces)
     private ulong CalculateBishopAttacks(int sq, ulong occupied)
     {
-        ulong attacks = 0UL;
-        int rank = sq / 8;
-        int file = sq % 8;
-        
-        // Northeast
-        for (int r = rank + 1, f = file + 1; r < 8 && f < 8; r++, f++)
-        {
-            ulong target = 1UL << (r * 8 + f);
-            attacks |= target;
-            if ((occupied & target) != 0) break;
-        }
-        
-        // Southeast
-        for (int r = rank - 1, f = file + 1; r >= 0 && f < 8; r--, f++)
-        {
-            ulong target = 1UL << (r * 8 + f);
-            attacks |= target;
-            if ((occupied & target) != 0) break;
-        }
-        
-        // Southwest
-        for (int r = rank - 1, f = file - 1; r >= 0 && f >= 0; r--, f--)
-        {
-            ulong target = 1UL << (r * 8 + f);
-            attacks |= target;
-            if ((occupied & target) != 0) break;
-        }
-        
-        // Northwest
-        for (int r = rank + 1, f = file - 1; r < 8 && f >= 0; r++, f--)
-        {
-            ulong target = 1UL << (r * 8 + f);
-            attacks |= target;
-            if ((occupied & target) != 0) break;
-        }
-        
-        return attacks;
+        return magicBitboards.GetBishopAttacks(sq, occupied);
     }
     
     // Calculate rook attacks (simplified - no blocking pieces)
     private ulong CalculateRookAttacks(int sq, ulong occupied)
     {
-        ulong attacks = 0UL;
-        int rank = sq / 8;
-        int file = sq % 8;
-        
-        // North
-        for (int r = rank + 1; r < 8; r++)
-        {
-            ulong target = 1UL << (r * 8 + file);
-            attacks |= target;
-            if ((occupied & target) != 0) break;
-        }
-        
-        // East
-        for (int f = file + 1; f < 8; f++)
-        {
-            ulong target = 1UL << (rank * 8 + f);
-            attacks |= target;
-            if ((occupied & target) != 0) break;
-        }
-        
-        // South
-        for (int r = rank - 1; r >= 0; r--)
-        {
-            ulong target = 1UL << (r * 8 + file);
-            attacks |= target;
-            if ((occupied & target) != 0) break;
-        }
-        
-        // West
-        for (int f = file - 1; f >= 0; f--)
-        {
-            ulong target = 1UL << (rank * 8 + f);
-            attacks |= target;
-            if ((occupied & target) != 0) break;
-        }
-        
-        return attacks;
+        return magicBitboards.GetRookAttacks(sq, occupied);
     }
     
     // Calculate queen attacks (bishop + rook)
     private ulong CalculateQueenAttacks(int sq, ulong occupied)
     {
-        return CalculateBishopAttacks(sq, occupied) | CalculateRookAttacks(sq, occupied);
+        return magicBitboards.GetQueenAttacks(sq, occupied);
     }
     
     // Make a score from middlegame and endgame values
