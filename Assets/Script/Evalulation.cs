@@ -100,11 +100,7 @@ public class Evaluation
     private const int ThreatBySafePawnMg = 173; private const int ThreatBySafePawnEg = 94;
     private const int TrappedRookMg = 52; private const int TrappedRookEg = 10;
     private const int WeakQueenMg = 49; private const int WeakQueenEg = 15;
-    
-    // NEW: Penalties for poorly defended pieces (based on Stockfish's values)
     private const int PoorlyDefendedMg = 50; private const int PoorlyDefendedEg = 30;
-    
-    // NEW: Penalty for no queen in attack (based on Stockfish's value)
     private const int NoQueenInAttackMg = 873; private const int NoQueenInAttackEg = 400;
     
     // Tempo bonus
