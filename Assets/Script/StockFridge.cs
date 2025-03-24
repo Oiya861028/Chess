@@ -8,9 +8,8 @@ public class StockFridge
     private Evaluation evaluation;
     private Bitboard bitboard;
     private const int INFINITY = 9999999;
-    private const int MATE_SCORE = 9000000; // Score for checkmate
+    private const int MATE_SCORE = 9000000; 
     
-    // Quiescence search parameters
     private const int MAX_QUIESCENCE_DEPTH = 8;
     private const int DELTA_MARGIN = 120;
     
@@ -43,8 +42,8 @@ public class StockFridge
         this.transpositionTable = new TranspositionTable();
         
         // Initialize Zobrist keys for hashing
-        System.Random rand = new System.Random(123456); // Fixed seed for reproducibility
-        zobristKeys = new ulong[7,2,64]; // 7 piece types, 2 colors, 64 squares
+        System.Random rand = new System.Random(123456); 
+        zobristKeys = new ulong[7,2,64]; 
         
         // Generate random numbers for each piece/square combination
         for (int piece = 0; piece < 7; piece++)
@@ -123,7 +122,7 @@ public class StockFridge
             {
                 score = TT_SCORE;
             }
-            // 2. Captures - score by MVV/LVA (Most Valuable Victim/Least Valuable Attacker)
+            // 2. Captures - score by MVV/LVA 
             else if (IsMoveCapture(move))
             {
                 int victimValue = 0;
@@ -300,7 +299,7 @@ public class StockFridge
                 bestMove = iterationBestMove;
                 ttMove = bestMove; // Update for next iteration
                 
-                // Store in transposition table - this is an exact value
+                // Store in transposition table 
                 transpositionTable.Store(currentHash, currentDepth, TranspositionTable.TT_EXACT, bestValue, bestMove);
             }
             
@@ -338,7 +337,7 @@ public class StockFridge
         if (inCheck && depth > 0)
             depth += 1;
             
-        // Base case: if we've reached maximum depth, use quiescence search
+        // if we've reached maximum depth, use quiescence search
         if (depth <= 0) 
         {
             return QuiescenceSearch(alpha, beta, isWhite, previousMove, ply);

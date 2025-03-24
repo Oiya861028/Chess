@@ -300,13 +300,13 @@ public class Evaluation
     
     public bool IsInCheck(bool isWhite, ulong[] whitePieces, ulong[] blackPieces, ulong allPieces)
     {
-        // Sanity check to prevent array index out of bounds
+        // check to prevent array index out of bounds
         if (whitePieces == null || whitePieces.Length < 7 || blackPieces == null || blackPieces.Length < 7) {
             Debug.LogError("Invalid piece arrays passed to IsInCheck. Arrays must have at least 7 elements.");
             return false;
         }
 
-        // Get king square - make sure the king exists
+        // Get king square
         ulong kingBitboard = isWhite ? whitePieces[KING] : blackPieces[KING];
         if (kingBitboard == 0) {
             Debug.LogError("No king found for " + (isWhite ? "white" : "black") + " in IsInCheck!");
@@ -340,21 +340,19 @@ public class Evaluation
             }
         } else {
             // Black king is attacked by white pawns
-            // White pawns attack up-left and up-right from their perspective
-            // From king perspective, they're down-right and down-left
             int rank = kingSq / 8;
             int file = kingSq % 8;
             
             // Only check if not on bottom rank (rank 0)
             if (rank > 0) {
-                // Check down-right (from king's perspective)
+                // Check down-right 
                 if (file > 0) { // Not on h-file
                     ulong downRightSq = 1UL << (kingSq - 9);
                     if ((downRightSq & whitePieces[PAWN]) != 0)
                         return true;
                 }
                 
-                // Check down-left (from king's perspective)
+                // Check down-left 
                 if (file < 7) { // Not on a-file
                     ulong downLeftSq = 1UL << (kingSq - 7);
                     if ((downLeftSq & whitePieces[PAWN]) != 0)
@@ -399,7 +397,7 @@ public class Evaluation
                                     (whitePieces[ROOK] | whitePieces[QUEEN]))) != 0)
             return true;
 
-        // Check for adjacent enemy king (kings can never be adjacent to each other)
+        // Check for adjacent enemy king 
         ulong enemyKingBitboard = isWhite ? blackPieces[KING] : whitePieces[KING];
         if (enemyKingBitboard != 0) {
             int enemyKingSq = BitOperations.TrailingZeroCount(enemyKingBitboard);
@@ -638,7 +636,7 @@ public class Evaluation
         int enemySide = 1 - side;
         Score score = new Score(0, 0);
         
-        // Setup mobility area - squares not attacked by enemy pawns and not occupied by our pawns or king
+        // Setup mobility area which is squares not attacked by enemy pawns and not occupied by our pawns or king
         mobilityArea[side] = ~(attackedBy[enemySide * 7 + PAWN] | ownPieces[PAWN] | ownPieces[KING]);
         
         // Knights mobility
