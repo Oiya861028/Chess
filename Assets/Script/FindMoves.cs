@@ -118,12 +118,12 @@ public class FindMoves
                 if (!kingsideRookMoved) {
                     // Adjusted paths for reversed bit ordering
                     ulong kingsidePath = isWhite ? 
-                                        ((1UL << 1) | (1UL << 2)) :  // g1,f1 in new mapping
-                                        ((1UL << 57) | (1UL << 58));  // g8,f8 in new mapping
+                                        ((1UL << 1) | (1UL << 2)) :  
+                                        ((1UL << 57) | (1UL << 58));  
                     
                     if ((bitboard.returnAllPieces() & kingsidePath) == 0) {
                         // Check if king passes through check
-                        int passThroughSquare = isWhite ? 2 : 58; // f1 or f8 in new mapping
+                        int passThroughSquare = isWhite ? 2 : 58; 
                         
                         // Try moving king to pass through square
                         Move passThroughMove = new Move(kingStartPosition, passThroughSquare, previousMove, (int)PieceType.King, isWhite);
@@ -138,7 +138,7 @@ public class FindMoves
                         
                         if (!passThroughCheck) {
                             // Check destination square
-                            int destSquare = isWhite ? 1 : 57; // g1 or g8 in new mapping
+                            int destSquare = isWhite ? 1 : 57; 
                             
                             Move destMove = new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite);
                             bitboard.UpdateBitBoard(destMove);
@@ -151,7 +151,7 @@ public class FindMoves
                             bitboard.UndoBitboard();
                             
                             if (!destCheck) {
-                                // Add kingside castling move
+                                // add kingside castling move
                                 legalMoves.Add(new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite));
                                 if (debugMode) Debug.Log($"Added {(isWhite ? "white" : "black")} kingside castling move");
                             }
@@ -164,13 +164,12 @@ public class FindMoves
                 if (!queensideRookMoved) {
                     // Adjusted paths for reversed bit ordering
                     ulong queensidePath = isWhite ? 
-                                        ((1UL << 4) | (1UL << 5) | (1UL << 6)) :  // d1,c1,b1 in new mapping
-                                        ((1UL << 60) | (1UL << 61) | (1UL << 62)); // d8,c8,b8 in new mapping
+                                        ((1UL << 4) | (1UL << 5) | (1UL << 6)) : 
+                                        ((1UL << 60) | (1UL << 61) | (1UL << 62));
                     
                     if ((bitboard.returnAllPieces() & queensidePath) == 0) {
                         // Check if king passes through check
-                        int passThroughSquare = isWhite ? 4 : 60; // d1 or d8 in new mapping
-                        
+                        int passThroughSquare = isWhite ? 4 : 60; 
                         // Try moving king to pass through square
                         Move passThroughMove = new Move(kingStartPosition, passThroughSquare, previousMove, (int)PieceType.King, isWhite);
                         bitboard.UpdateBitBoard(passThroughMove);
@@ -184,7 +183,7 @@ public class FindMoves
                         
                         if (!passThroughCheck) {
                             // Check destination square
-                            int destSquare = isWhite ? 5 : 61; // c1 or c8 in new mapping
+                            int destSquare = isWhite ? 5 : 61; 
                             
                             Move destMove = new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite);
                             bitboard.UpdateBitBoard(destMove);
@@ -251,7 +250,7 @@ public class FindMoves
                         isPawnDoubleMove = true;
                     }
                     
-                    // Check for promotion (pawn reaching the last rank)
+                    // Check for promotion
                     int destRank = i / 8;
                     if ((isWhite && destRank == 7) || (!isWhite && destRank == 0))
                     {
@@ -268,7 +267,7 @@ public class FindMoves
                     // If moving diagonally to an empty square, it might be en passant
                     if (file != targetFile && (bitboard.returnAllPieces() & (1UL << i)) == 0)
                     {
-                        // For white pawns on rank 5 (index 4)
+                        // For white pawns on rank 5
                         if (isWhite && rank == 4 && previousMove != null &&
                             previousMove.PieceType == (int)PieceType.Pawn &&
                             !previousMove.IsWhite && previousMove.IsPawnDoubleMove)
@@ -834,12 +833,12 @@ public class FindMoves
         
         if (isWhite)
         {
-            // Forward move (1 square)
+            // Forward move
             if (rank < 7 && ((allPieces & (1UL << (position + 8))) == 0))
             {
                 moves |= 1UL << (position + 8);
                 
-                // Double forward move (from starting position)
+                // Double forward move 
                 if (rank == 1 && ((allPieces & (1UL << (position + 16))) == 0))
                 {
                     moves |= 1UL << (position + 16);
@@ -861,7 +860,7 @@ public class FindMoves
                     moves |= 1UL << (position + 9);
                 }
                 
-                // En passant captures - only on rank 5 (index 4) for white pawns
+                // En passant captures - only on rank 5 for white pawns
                 if (rank == 4 && previousMove != null && 
                     previousMove.PieceType == (int)PieceType.Pawn && 
                     !previousMove.IsWhite && 
@@ -869,7 +868,7 @@ public class FindMoves
                 {
                     int enPassantFile = previousMove.Destination % 8;
                     
-                    // Check if our pawn is adjacent to the double-moved pawn
+                    // Check if our pawn is adjacent to the double moved pawn
                     if (file > 0 && enPassantFile == file - 1)
                     {
                         // En passant capture to the left
@@ -887,12 +886,12 @@ public class FindMoves
         }
         else // Black pawn
         {
-            // Forward move (1 square)
+            // Forward move 
             if (rank > 0 && ((allPieces & (1UL << (position - 8))) == 0))
             {
                 moves |= 1UL << (position - 8);
                 
-                // Double forward move (from starting position)
+                // Double forward move 
                 if (rank == 6 && ((allPieces & (1UL << (position - 16))) == 0))
                 {
                     moves |= 1UL << (position - 16);
@@ -902,19 +901,19 @@ public class FindMoves
             // Capture moves
             if (rank > 0)
             {
-                // Capture to the left (file perspective: right to left)
+                // Capture to the left
                 if (file < 7 && ((enemyPieces & (1UL << (position - 7))) != 0))
                 {
                     moves |= 1UL << (position - 7);
                 }
                 
-                // Capture to the right (file perspective: left to right)
+                // Capture to the right
                 if (file > 0 && ((enemyPieces & (1UL << (position - 9))) != 0))
                 {
                     moves |= 1UL << (position - 9);
                 }
                 
-                // En passant captures - only on rank 4 (index 3) for black pawns
+                // En passant captures - only on rank 4 for black pawns
                 if (rank == 3 && previousMove != null && 
                     previousMove.PieceType == (int)PieceType.Pawn && 
                     previousMove.IsWhite && 
@@ -925,13 +924,13 @@ public class FindMoves
                     // Check if our pawn is adjacent to the double-moved pawn
                     if (file < 7 && enPassantFile == file + 1)
                     {
-                        // En passant capture to the left (file perspective: right to left)
+                        // En passant capture to the left 
                         moves |= 1UL << (position - 7);
                         if (debugMode) Debug.Log($"Black pawn at {BitboardUtils.IndexToAlgebraic(position)} can en passant capture to {BitboardUtils.IndexToAlgebraic(position - 7)}");
                     }
                     if (file > 0 && enPassantFile == file - 1)
                     {
-                        // En passant capture to the right (file perspective: left to right)
+                        // En passant capture to the right
                         moves |= 1UL << (position - 9);
                         if (debugMode) Debug.Log($"Black pawn at {BitboardUtils.IndexToAlgebraic(position)} can en passant capture to {BitboardUtils.IndexToAlgebraic(position - 9)}");
                     }
@@ -1033,7 +1032,7 @@ public class FindMoves
         return BitboardUtils.IndexToAlgebraic(position);
     }
     
-    /// Helper method to find the trailing zero count in a 64-bit integer
+    /// Helper method to find the trailing zero count in a 64 bit integer
     private static class BitOperations
     {
         public static int TrailingZeroCount(ulong value)
