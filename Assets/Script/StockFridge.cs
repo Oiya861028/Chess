@@ -633,7 +633,11 @@ public class StockFridge
         public const int TT_BETA = 2;   // Lower bound
         
         // Size should be a power of 2 for efficient indexing with bit operations
-        private const int TT_SIZE = 0x1000000; // 16 million entries
+        #if UNITY_WEBGL
+            private const int TT_SIZE = 0x200000; // 2 million for WebGL
+        #else
+            private const int TT_SIZE = 0x1000000; // 16 million for desktop
+        #endif
         private const int TT_MASK = TT_SIZE - 1; // For efficient modulo with bitwise AND
         
         // Structure for table entries
