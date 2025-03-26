@@ -7,7 +7,7 @@ public class BoardController : MonoBehaviour
     Bitboard bitboard;
     public bool debugMode = true;
     //half pli, which I call a move, that precedes the current board state
-    Move previousMove;
+    private int previousMove;
     private const int WHITE_KING_START = 3;
     private const int BLACK_KING_START = 59;
     private const int WHITE_KINGSIDE_ROOK_START = 0;
@@ -76,7 +76,7 @@ public class BoardController : MonoBehaviour
 
         
         bitboard = new Bitboard();
-        previousMove = null;
+        previousMove = 0;
         evaluation = new Evaluation(); // Initialize the evaluation object
         findMoves = new FindMoves(bitboard);
         findMoves.SetPreviousMove(previousMove);
@@ -349,21 +349,22 @@ public class BoardController : MonoBehaviour
             
             // Get the best move from StockFridge
             int currentDepth = isWhiteTurn ? whiteAIDepth : blackAIDepth;
-            Move aiMove = AI.GetBestMove(currentDepth, isWhiteTurn, previousMove);
+            int aiMove = AI.GetBestMove(currentDepth, isWhiteTurn, previousMove);
             
-            if (aiMove != null)
+            if (aiMove != 0)
             {
                 // Double check the AI is playing the correct color
-                if (aiMove.IsWhite != isWhiteTurn)
+                if (MoveUtil.IsWhite(aiMove) != isWhiteTurn)
                 {
-                    Debug.LogError("AI returned a " + (aiMove.IsWhite ? "white" : "black") + 
+                    Debug.LogError("AI returned a " + (MoveUtil.IsWhite(aiMove) ? "white" : "black") + 
                                 " piece move but should be playing as " + (isWhiteTurn ? "white" : "black"));
                     aiIsThinking = false;
                     return;
                 }
                 
                 // Find the piece at the source position
-                selectedPiece = FindPieceAtPosition(aiMove.Source);
+                int source = MoveUtil.GetSource(aiMove);
+                selectedPiece = FindPieceAtPosition(source);
                 if (selectedPiece != null)
                 {
                     // Verify the piece is the right color
@@ -371,10 +372,10 @@ public class BoardController : MonoBehaviour
                     if (isPieceWhite != isWhiteTurn)
                     {
                         Debug.LogError("AI tried to move the wrong color piece: " + selectedPiece.name);
-                        Debug.LogError("Move source: " + BitboardUtils.IndexToAlgebraic(aiMove.Source) + 
-                                    ", destination: " + BitboardUtils.IndexToAlgebraic(aiMove.Destination) +
-                                    ", piece type: " + aiMove.PieceType + 
-                                    ", is white move: " + aiMove.IsWhite);
+                        Debug.LogError("Move source: " + BitboardUtils.IndexToAlgebraic(source) + 
+                                    ", destination: " + BitboardUtils.IndexToAlgebraic(MoveUtil.GetDestination(aiMove)) +
+                                    ", piece type: " + MoveUtil.GetPieceType(aiMove) + 
+                                    ", is white move: " + MoveUtil.IsWhite(aiMove));
                         
                         // Fix the inconsistency - update the bitboard
                         VerifyBoardState();
@@ -383,16 +384,16 @@ public class BoardController : MonoBehaviour
                         return;
                     }
                     
-                    selectedPieceIndex = aiMove.Source;
-                    selectedPieceType = (PieceType)aiMove.PieceType;
+                    selectedPieceIndex = source;
+                    selectedPieceType = (PieceType)MoveUtil.GetPieceType(aiMove);
                     selectedPieceIsWhite = isPieceWhite;
 
                     // Display the move visually before making it
                     EraseHighlights();
-                    HighlightMove(aiMove.Source, aiMove.Destination);
+                    HighlightMove(source, MoveUtil.GetDestination(aiMove));
 
                     // Make the move
-                    MovePiece(aiMove.Source, aiMove.Destination);
+                    MovePiece(source, MoveUtil.GetDestination(aiMove));
                     
                     // Clean up and switch turns
                     EraseHighlights();
@@ -406,8 +407,8 @@ public class BoardController : MonoBehaviour
                         Debug.Log($"Checkmate! {winner} wins!");
                         // Optionally disable further moves with a gameIsOver flag
                     }
-                    Debug.Log("AI moved from " + BitboardUtils.IndexToAlgebraic(aiMove.Source) + 
-                            " to " + BitboardUtils.IndexToAlgebraic(aiMove.Destination));
+                    Debug.Log("AI moved from " + BitboardUtils.IndexToAlgebraic(source) + 
+                            " to " + BitboardUtils.IndexToAlgebraic(MoveUtil.GetDestination(aiMove)));
                             
                     // Debug board state after AI move
                     Debug.Log("Board state after AI move:");
@@ -418,14 +419,13 @@ public class BoardController : MonoBehaviour
                 }
                 else
                 {
-                    Debug.LogError("AI's piece not found at " + BitboardUtils.IndexToAlgebraic(aiMove.Source));
+                    Debug.LogError("AI's piece not found at " + BitboardUtils.IndexToAlgebraic(source));
                     
                     // Try to fix the inconsistency
                     VerifyBoardState();
                     
                     aiIsThinking = false;
                 }
-                previousMove = aiMove;
             }
             else
             {
@@ -721,10 +721,10 @@ public class BoardController : MonoBehaviour
     private bool DetectCheckmate(bool forWhite)
     {
         // Get all possible moves for the current player
-        List<Move> allPossibleMoves = findMoves.GetAllPossibleMoves(forWhite, previousMove);
+        List<int> allPossibleMoves = findMoves.GetAllPossibleMoves(forWhite, previousMove);
         
         // Check if any of these moves can escape check
-        foreach (Move move in allPossibleMoves)
+        foreach (int move in allPossibleMoves)
         {
             // Try making this move
             bitboard.UpdateBitBoard(move);
@@ -904,8 +904,7 @@ public class BoardController : MonoBehaviour
             // Get the exact destination rank
             int destRank = toIndex / 8;
             
-            // IMPORTANT: Make sure we're ACTUALLY at the promotion rank (7 for white, 0 for black)
-            // Not just attacking diagonally from the rank before
+            // Check if we're ACTUALLY at the promotion rank (7 for white, 0 for black)
             if ((isWhitePiece && destRank == 7) || (!isWhitePiece && destRank == 0))
             {
                 // Double-check source rank to ensure it's a legal promotion move
@@ -976,19 +975,19 @@ public class BoardController : MonoBehaviour
             (bitboard.returnAllPieces() & (1UL << toIndex)) == 0) // Empty destination
         {
             // Check if the previous move was a pawn double move
-            if (previousMove != null && 
-                previousMove.PieceType == (int)PieceType.Pawn && 
-                previousMove.IsPawnDoubleMove &&
-                previousMove.IsWhite != isWhitePiece)
+            if (previousMove != 0 && 
+                MoveUtil.GetPieceType(previousMove) == (int)PieceType.Pawn && 
+                MoveUtil.IsPawnDoubleMove(previousMove) &&
+                MoveUtil.IsWhite(previousMove) != isWhitePiece)
             {
-                int prevDestFile = previousMove.Destination % 8;
+                int prevDestFile = MoveUtil.GetDestination(previousMove) % 8;
                 int targetFile = toIndex % 8;
                 
                 if (prevDestFile == targetFile)
                 {
                     isEnPassant = true;
                     // Calculate the position of the captured pawn
-                    int capturedPawnIndex = previousMove.Destination;
+                    int capturedPawnIndex = MoveUtil.GetDestination(previousMove);
                     
                     Debug.Log($"En passant: Trying to capture pawn at {BitboardUtils.IndexToAlgebraic(capturedPawnIndex)}");
                     
@@ -1047,14 +1046,17 @@ public class BoardController : MonoBehaviour
             selectedPiece = null;
         }
         
+        // Create integer move
+        int move = MoveUtil.EncodeMove(
+            fromIndex, toIndex, (int)movingPieceType, isWhitePiece,
+            isEnPassant, isPawnDoubleMove, isPromotion, promotionPieceType, isCastling);
+            
         // Move the piece in the bitboard
-        Move move = new Move(fromIndex, toIndex, previousMove, (int)movingPieceType, isWhitePiece, 
-                            isEnPassant, isPawnDoubleMove, isPromotion, promotionPieceType);
         bitboard.UpdateBitBoard(move);
         previousMove = move;
         findMoves.SetPreviousMove(previousMove);
 
-        Debug.Log($"Creating move: Type={movingPieceType}, IsWhite={isWhitePiece}, " +
+        Debug.Log($"Created move: Type={movingPieceType}, IsWhite={isWhitePiece}, " +
                 $"From={BitboardUtils.IndexToAlgebraic(fromIndex)}, To={BitboardUtils.IndexToAlgebraic(toIndex)}, " +
                 $"IsEnPassant={isEnPassant}, IsPawnDoubleMove={isPawnDoubleMove}, IsPromotion={isPromotion}");
         
@@ -1129,7 +1131,7 @@ public class BoardController : MonoBehaviour
             Debug.Log($"Found rook at {BitboardUtils.IndexToAlgebraic(rookFromIndex)}");
             
             // Move the rook in the bitboard
-            Move rookMove = new Move(rookFromIndex, rookToIndex, previousMove, (int)PieceType.Rook, isWhitePiece);
+            int rookMove = MoveUtil.EncodeMove(rookFromIndex, rookToIndex, (int)PieceType.Rook, isWhitePiece);
             bitboard.UpdateBitBoard(rookMove);
             
             // Get the world position for the rook's destination
@@ -1158,7 +1160,18 @@ public class BoardController : MonoBehaviour
             rookObject = FindPieceAtPosition(rookFromIndex);
             if (rookObject != null) {
                 // Similar code as above for found rook
-                // ...
+                int rookMove = MoveUtil.EncodeMove(rookFromIndex, rookToIndex, (int)PieceType.Rook, isWhitePiece);
+                bitboard.UpdateBitBoard(rookMove);
+                
+                Vector3 rookDestination = GetWorldPositionForBit(rookToIndex);
+                
+                GameObject rookPrefab = isWhitePiece ? whiteRookPrefab : blackRookPrefab;
+                
+                DestroyImmediate(rookObject);
+                
+                string rookName = (isWhitePiece ? "White" : "Black") + "Rook_" + rookToIndex;
+                GameObject newRook = Instantiate(rookPrefab, rookDestination, Quaternion.identity, PieceParent);
+                newRook.name = rookName;
             } else {
                 // Create the rook at the destination anyway
                 Debug.Log($"Creating missing rook at destination {BitboardUtils.IndexToAlgebraic(rookToIndex)}");

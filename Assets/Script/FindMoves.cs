@@ -6,7 +6,7 @@ public class FindMoves
 {
     private Bitboard bitboard;
     private Evaluation evaluation;
-    private Move previousMove;
+    private int previousMove; // Changed from Move to int
     private MagicBitboards magicBitboards; // Added magic bitboards
     
     // Constants for the correct bit positions
@@ -24,26 +24,26 @@ public class FindMoves
     {
         this.bitboard = bitboard;
         this.evaluation = new Evaluation();
-        this.previousMove = null; 
+        this.previousMove = 0; // Default integer value (was null)
         this.magicBitboards = new MagicBitboards(); // Initialize magic bitboards
         Debug.Log("FindMoves initialized with bitboard and magic bitboards");
     }
 
-    public void SetPreviousMove(Move move)
+    public void SetPreviousMove(int move)
     {
         previousMove = move;
-        if (debugMode && move != null)
+        if (debugMode && move != 0)
         {
-            Debug.Log($"Previous move set to: {BitboardUtils.IndexToAlgebraic(move.Source)} to {BitboardUtils.IndexToAlgebraic(move.Destination)}, IsPawnDoubleMove: {move.IsPawnDoubleMove}");
+            Debug.Log($"Previous move set to: {BitboardUtils.IndexToAlgebraic(MoveUtil.GetSource(move))} to {BitboardUtils.IndexToAlgebraic(MoveUtil.GetDestination(move))}, IsPawnDoubleMove: {MoveUtil.IsPawnDoubleMove(move)}");
         }
     }
 
     /// Gets all legal moves for the specified side
-    public List<Move> GetAllPossibleMoves(bool isWhite, Move previousMove)
+    public List<int> GetAllPossibleMoves(bool isWhite, int previousMove)
     {
         if (debugMode) Debug.Log("GetAllPossibleMoves called for " + (isWhite ? "white" : "black"));
         
-        List<Move> moves = new List<Move>();
+        List<int> moves = new List<int>();
         
         // Get piece bitboards based on color
         ulong ownPawns = isWhite ? bitboard.WhitePawn : bitboard.BlackPawn;
@@ -100,7 +100,7 @@ public class FindMoves
         }
         
         // Filter out illegal moves (moves that leave the king in check)
-        List<Move> legalMoves = FilterLegalMoves(moves, isWhite);
+        List<int> legalMoves = FilterLegalMoves(moves, isWhite);
         
         if (debugMode) Debug.Log($"Found {legalMoves.Count} legal moves");
         
@@ -126,7 +126,10 @@ public class FindMoves
                         int passThroughSquare = isWhite ? 2 : 58; 
                         
                         // Try moving king to pass through square
-                        Move passThroughMove = new Move(kingStartPosition, passThroughSquare, previousMove, (int)PieceType.King, isWhite);
+                        int passThroughMove = MoveUtil.EncodeMove(
+                            kingStartPosition, passThroughSquare, 
+                            (int)PieceType.King, isWhite);
+                            
                         bitboard.UpdateBitBoard(passThroughMove);
                         
                         bool passThroughCheck = evaluation.IsInCheck(isWhite, 
@@ -140,7 +143,10 @@ public class FindMoves
                             // Check destination square
                             int destSquare = isWhite ? 1 : 57; 
                             
-                            Move destMove = new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite);
+                            int destMove = MoveUtil.EncodeMove(
+                                kingStartPosition, destSquare, 
+                                (int)PieceType.King, isWhite);
+                                
                             bitboard.UpdateBitBoard(destMove);
                             
                             bool destCheck = evaluation.IsInCheck(isWhite, 
@@ -152,7 +158,13 @@ public class FindMoves
                             
                             if (!destCheck) {
                                 // add kingside castling move
-                                legalMoves.Add(new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite));
+                                int castlingMove = MoveUtil.EncodeMove(
+                                    kingStartPosition, destSquare, 
+                                    (int)PieceType.King, isWhite,
+                                    false, false, false, 0, true);
+                                    
+                                legalMoves.Add(castlingMove);
+                                
                                 if (debugMode) Debug.Log($"Added {(isWhite ? "white" : "black")} kingside castling move");
                             }
                         }
@@ -171,7 +183,10 @@ public class FindMoves
                         // Check if king passes through check
                         int passThroughSquare = isWhite ? 4 : 60; 
                         // Try moving king to pass through square
-                        Move passThroughMove = new Move(kingStartPosition, passThroughSquare, previousMove, (int)PieceType.King, isWhite);
+                        int passThroughMove = MoveUtil.EncodeMove(
+                            kingStartPosition, passThroughSquare, 
+                            (int)PieceType.King, isWhite);
+                            
                         bitboard.UpdateBitBoard(passThroughMove);
                         
                         bool passThroughCheck = evaluation.IsInCheck(isWhite, 
@@ -185,7 +200,10 @@ public class FindMoves
                             // Check destination square
                             int destSquare = isWhite ? 5 : 61; 
                             
-                            Move destMove = new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite);
+                            int destMove = MoveUtil.EncodeMove(
+                                kingStartPosition, destSquare, 
+                                (int)PieceType.King, isWhite);
+                                
                             bitboard.UpdateBitBoard(destMove);
                             
                             bool destCheck = evaluation.IsInCheck(isWhite, 
@@ -197,7 +215,13 @@ public class FindMoves
                             
                             if (!destCheck) {
                                 // Add queenside castling move
-                                legalMoves.Add(new Move(kingStartPosition, destSquare, previousMove, (int)PieceType.King, isWhite));
+                                int castlingMove = MoveUtil.EncodeMove(
+                                    kingStartPosition, destSquare, 
+                                    (int)PieceType.King, isWhite,
+                                    false, false, false, 0, true);
+                                    
+                                legalMoves.Add(castlingMove);
+                                
                                 if (debugMode) Debug.Log($"Added {(isWhite ? "white" : "black")} queenside castling move");
                             }
                         }
@@ -228,11 +252,11 @@ public class FindMoves
     }
 
     // Add moves for a piece at a specific position
-    private void AddMovesForPosition(List<Move> moves, int position, PieceType pieceType, bool isWhite, Move previousMove)
+    private void AddMovesForPosition(List<int> moves, int position, PieceType pieceType, bool isWhite, int previousMove)
     {
         ulong moveBitboard = GetPossibleMovesForPiece(position, pieceType, isWhite);
         
-        // Convert bits to Move objects
+        // Convert bits to integer moves
         for (int i = 0; i < 64; i++)
         {
             if ((moveBitboard & (1UL << i)) != 0)
@@ -268,11 +292,11 @@ public class FindMoves
                     if (file != targetFile && (bitboard.returnAllPieces() & (1UL << i)) == 0)
                     {
                         // For white pawns on rank 5
-                        if (isWhite && rank == 4 && previousMove != null &&
-                            previousMove.PieceType == (int)PieceType.Pawn &&
-                            !previousMove.IsWhite && previousMove.IsPawnDoubleMove)
+                        if (isWhite && rank == 4 && previousMove != 0 &&
+                            MoveUtil.GetPieceType(previousMove) == (int)PieceType.Pawn &&
+                            !MoveUtil.IsWhite(previousMove) && MoveUtil.IsPawnDoubleMove(previousMove))
                         {
-                            int enPassantFile = previousMove.Destination % 8;
+                            int enPassantFile = MoveUtil.GetDestination(previousMove) % 8;
                             if (targetFile == enPassantFile)
                             {
                                 isEnPassant = true;
@@ -280,11 +304,11 @@ public class FindMoves
                             }
                         }
                         // For black pawns on rank 4 (index 3)
-                        else if (!isWhite && rank == 3 && previousMove != null &&
-                                previousMove.PieceType == (int)PieceType.Pawn &&
-                                previousMove.IsWhite && previousMove.IsPawnDoubleMove)
+                        else if (!isWhite && rank == 3 && previousMove != 0 &&
+                                MoveUtil.GetPieceType(previousMove) == (int)PieceType.Pawn &&
+                                MoveUtil.IsWhite(previousMove) && MoveUtil.IsPawnDoubleMove(previousMove))
                         {
-                            int enPassantFile = previousMove.Destination % 8;
+                            int enPassantFile = MoveUtil.GetDestination(previousMove) % 8;
                             if (targetFile == enPassantFile)
                             {
                                 isEnPassant = true;
@@ -294,17 +318,21 @@ public class FindMoves
                     }
                 }
                 
-                moves.Add(new Move(position, i, previousMove, (int)pieceType, isWhite, 
-                                isEnPassant, isPawnDoubleMove, isPromotion, promotionPieceType));
+                // Create integer move instead of a Move object
+                int move = MoveUtil.EncodeMove(
+                    position, i, (int)pieceType, isWhite,
+                    isEnPassant, isPawnDoubleMove, isPromotion, promotionPieceType);
+                    
+                moves.Add(move);
             }
         }
     }
    
-    private List<Move> FilterLegalMoves(List<Move> moves, bool isWhite)
+    private List<int> FilterLegalMoves(List<int> moves, bool isWhite)
     {
-        List<Move> legalMoves = new List<Move>();
+        List<int> legalMoves = new List<int>();
         
-        foreach (Move move in moves)
+        foreach (int move in moves)
         {
             // Make the move
             bitboard.UpdateBitBoard(move);
@@ -326,7 +354,9 @@ public class FindMoves
             }
             else if (debugMode)
             {
-                Debug.Log($"Filtered illegal move: {GetSquareName(move.Source)} to {GetSquareName(move.Destination)} - leaves king in check");
+                int source = MoveUtil.GetSource(move);
+                int dest = MoveUtil.GetDestination(move);
+                Debug.Log($"Filtered illegal move: {GetSquareName(source)} to {GetSquareName(dest)} - leaves king in check");
             }
         }
         
@@ -339,7 +369,7 @@ public class FindMoves
         ulong kingBitboard = isWhite ? bitboard.WhiteKing : bitboard.BlackKing;
         if (kingBitboard == 0) return false;
         
-        int kingIndex = BitboardUtils.GetLSB(kingBitboard);
+        int kingIndex = BitOperations.TrailingZeroCount(kingBitboard);
         
         // Get coordinates
         int pieceRank = pieceIndex / 8;
@@ -499,16 +529,13 @@ public class FindMoves
         // Now filter out moves that would leave the king in check
         ulong legalMoves = 0;
         
-        // Create a temporary Move object to test each move
-        Move previousMove = null; // This won't be used for the test
-        
         // Check each possible move
         for (int i = 0; i < 64; i++)
         {
             if ((pseudoLegalMoves & (1UL << i)) != 0)
             {
                 // Try this move
-                Move testMove = new Move(position, i, previousMove, (int)pieceType, isWhite);
+                int testMove = MoveUtil.EncodeMove(position, i, (int)pieceType, isWhite);
                 bitboard.UpdateBitBoard(testMove);
                 
                 // Check if king is in check after this move
@@ -593,7 +620,7 @@ public class FindMoves
                             bool canCastle = true;
                             
                             // Check the intermediate square (f1 - position 2)
-                            Move passThroughMove = new Move(position, 2, null, (int)PieceType.King, isWhite);
+                            int passThroughMove = MoveUtil.EncodeMove(position, 2, (int)PieceType.King, isWhite);
                             bitboard.UpdateBitBoard(passThroughMove);
                             bool passThroughCheck = evaluation.IsInCheck(isWhite, 
                                                                         bitboard.returnWhitePiecesByTypes(), 
@@ -607,7 +634,7 @@ public class FindMoves
                             
                             // Check the destination square (g1 - position 1)
                             if (canCastle) {
-                                Move destMove = new Move(position, 1, null, (int)PieceType.King, isWhite);
+                                int destMove = MoveUtil.EncodeMove(position, 1, (int)PieceType.King, isWhite);
                                 bitboard.UpdateBitBoard(destMove);
                                 bool destCheck = evaluation.IsInCheck(isWhite, 
                                                                     bitboard.returnWhitePiecesByTypes(), 
@@ -636,7 +663,7 @@ public class FindMoves
                             bool canCastle = true;
                             
                             // Check the intermediate square (d1 - position 4)
-                            Move passThroughMove = new Move(position, 4, null, (int)PieceType.King, isWhite);
+                            int passThroughMove = MoveUtil.EncodeMove(position, 4, (int)PieceType.King, isWhite);
                             bitboard.UpdateBitBoard(passThroughMove);
                             bool passThroughCheck = evaluation.IsInCheck(isWhite, 
                                                                         bitboard.returnWhitePiecesByTypes(), 
@@ -650,7 +677,7 @@ public class FindMoves
                             
                             // Check the destination square (c1 - position 5)
                             if (canCastle) {
-                                Move destMove = new Move(position, 5, null, (int)PieceType.King, isWhite);
+                                int destMove = MoveUtil.EncodeMove(position, 5, (int)PieceType.King, isWhite);
                                 bitboard.UpdateBitBoard(destMove);
                                 bool destCheck = evaluation.IsInCheck(isWhite, 
                                                                     bitboard.returnWhitePiecesByTypes(), 
@@ -688,7 +715,7 @@ public class FindMoves
                             bool canCastle = true;
                             
                             // Check the intermediate square (f8 - position 58)
-                            Move passThroughMove = new Move(position, 58, null, (int)PieceType.King, isWhite);
+                            int passThroughMove = MoveUtil.EncodeMove(position, 58, (int)PieceType.King, isWhite);
                             bitboard.UpdateBitBoard(passThroughMove);
                             bool passThroughCheck = evaluation.IsInCheck(isWhite, 
                                                                         bitboard.returnWhitePiecesByTypes(), 
@@ -702,7 +729,7 @@ public class FindMoves
                             
                             // Check the destination square (g8 - position 57)
                             if (canCastle) {
-                                Move destMove = new Move(position, 57, null, (int)PieceType.King, isWhite);
+                                int destMove = MoveUtil.EncodeMove(position, 57, (int)PieceType.King, isWhite);
                                 bitboard.UpdateBitBoard(destMove);
                                 bool destCheck = evaluation.IsInCheck(isWhite, 
                                                                     bitboard.returnWhitePiecesByTypes(), 
@@ -731,7 +758,7 @@ public class FindMoves
                             bool canCastle = true;
                             
                             // Check the intermediate square (d8 - position 60)
-                            Move passThroughMove = new Move(position, 60, null, (int)PieceType.King, isWhite);
+                            int passThroughMove = MoveUtil.EncodeMove(position, 60, (int)PieceType.King, isWhite);
                             bitboard.UpdateBitBoard(passThroughMove);
                             bool passThroughCheck = evaluation.IsInCheck(isWhite, 
                                                                         bitboard.returnWhitePiecesByTypes(), 
@@ -745,7 +772,7 @@ public class FindMoves
                             
                             // Check the destination square (c8 - position 61)
                             if (canCastle) {
-                                Move destMove = new Move(position, 61, null, (int)PieceType.King, isWhite);
+                                int destMove = MoveUtil.EncodeMove(position, 61, (int)PieceType.King, isWhite);
                                 bitboard.UpdateBitBoard(destMove);
                                 bool destCheck = evaluation.IsInCheck(isWhite, 
                                                                     bitboard.returnWhitePiecesByTypes(), 
@@ -861,12 +888,12 @@ public class FindMoves
                 }
                 
                 // En passant captures - only on rank 5 for white pawns
-                if (rank == 4 && previousMove != null && 
-                    previousMove.PieceType == (int)PieceType.Pawn && 
-                    !previousMove.IsWhite && 
-                    previousMove.IsPawnDoubleMove)
+                if (rank == 4 && previousMove != 0 && 
+                    MoveUtil.GetPieceType(previousMove) == (int)PieceType.Pawn && 
+                    !MoveUtil.IsWhite(previousMove) && 
+                    MoveUtil.IsPawnDoubleMove(previousMove))
                 {
-                    int enPassantFile = previousMove.Destination % 8;
+                    int enPassantFile = MoveUtil.GetDestination(previousMove) % 8;
                     
                     // Check if our pawn is adjacent to the double moved pawn
                     if (file > 0 && enPassantFile == file - 1)
@@ -914,12 +941,12 @@ public class FindMoves
                 }
                 
                 // En passant captures - only on rank 4 for black pawns
-                if (rank == 3 && previousMove != null && 
-                    previousMove.PieceType == (int)PieceType.Pawn && 
-                    previousMove.IsWhite && 
-                    previousMove.IsPawnDoubleMove)
+                if (rank == 3 && previousMove != 0 && 
+                    MoveUtil.GetPieceType(previousMove) == (int)PieceType.Pawn && 
+                    MoveUtil.IsWhite(previousMove) && 
+                    MoveUtil.IsPawnDoubleMove(previousMove))
                 {
-                    int enPassantFile = previousMove.Destination % 8;
+                    int enPassantFile = MoveUtil.GetDestination(previousMove) % 8;
                     
                     // Check if our pawn is adjacent to the double-moved pawn
                     if (file < 7 && enPassantFile == file + 1)

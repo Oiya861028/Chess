@@ -23,7 +23,7 @@ public class StockFridge
     
     // Killer moves for move ordering - store two killer moves per ply
     private const int MAX_DEPTH = 64;
-    private Move[,] killerMoves = new Move[2, MAX_DEPTH];
+    private int[,] killerMoves = new int[2, MAX_DEPTH];
     
     // History heuristic table for quiet move ordering
     private int[,] historyTable = new int[2, 64 * 64]; // [color, from*64+to]
@@ -106,19 +106,24 @@ public class StockFridge
     }
     
     // Stockfish-style move ordering
-    private void OrderMoves(List<Move> moves, Move ttMove, int ply)
+    private void OrderMoves(List<int> moves, int ttMove, int ply)
     {
         const int TT_SCORE = 20000;
         const int WINNING_CAPTURE_SCORE = 10000;
         const int PROMOTION_SCORE = 9000;
         const int KILLER_SCORE = 8000;
         
-        foreach (Move move in moves)
+        // Use a dictionary to store scores for each move
+        Dictionary<int, int> moveScores = new Dictionary<int, int>();
+        
+        foreach (int move in moves)
         {
             int score = 0;
             
             // 1. Hash move from transposition table (highest priority)
-            if (ttMove != null && move.Source == ttMove.Source && move.Destination == ttMove.Destination)
+            if (ttMove != 0 && 
+                MoveUtil.GetSource(move) == MoveUtil.GetSource(ttMove) && 
+                MoveUtil.GetDestination(move) == MoveUtil.GetDestination(ttMove))
             {
                 score = TT_SCORE;
             }
@@ -126,17 +131,18 @@ public class StockFridge
             else if (IsMoveCapture(move))
             {
                 int victimValue = 0;
-                ulong destBit = 1UL << move.Destination;
+                int dest = MoveUtil.GetDestination(move);
+                ulong destBit = 1UL << dest;
                 
                 // Find captured piece value
-                if (move.IsWhite)
+                if (MoveUtil.IsWhite(move))
                 {
                     if ((bitboard.BlackPawn & destBit) != 0) victimValue = 100;
                     else if ((bitboard.BlackKnight & destBit) != 0) victimValue = 320;
                     else if ((bitboard.BlackBishop & destBit) != 0) victimValue = 330;
                     else if ((bitboard.BlackRook & destBit) != 0) victimValue = 500;
                     else if ((bitboard.BlackQueen & destBit) != 0) victimValue = 900;
-                    else if (move.IsEnPassant) victimValue = 100; // Pawn value for en passant
+                    else if (MoveUtil.IsEnPassant(move)) victimValue = 100; // Pawn value for en passant
                 }
                 else
                 {
@@ -145,54 +151,57 @@ public class StockFridge
                     else if ((bitboard.WhiteBishop & destBit) != 0) victimValue = 330;
                     else if ((bitboard.WhiteRook & destBit) != 0) victimValue = 500;
                     else if ((bitboard.WhiteQueen & destBit) != 0) victimValue = 900;
-                    else if (move.IsEnPassant) victimValue = 100; // Pawn value for en passant
+                    else if (MoveUtil.IsEnPassant(move)) victimValue = 100; // Pawn value for en passant
                 }
                 
                 // Apply MVV-LVA scoring
                 if (victimValue > 0)
                 {
                     // Most Valuable Victim (higher value) - Least Valuable Attacker (lower value)
-                    score = WINNING_CAPTURE_SCORE + victimValue - (move.PieceType * 10);
+                    score = WINNING_CAPTURE_SCORE + victimValue - (MoveUtil.GetPieceType(move) * 10);
                 }
             }
             // 3. Promotions
-            else if (move.IsPromotion)
+            else if (MoveUtil.IsPromotion(move))
             {
-                score = PROMOTION_SCORE + move.PromotionPieceType * 10;
+                score = PROMOTION_SCORE + MoveUtil.GetPromotionPieceType(move) * 10;
             }
             // 4. Killer moves (quiet moves that caused beta cutoffs at this ply)
             else if (ply < killerMoves.GetLength(1))
             {
-                if (killerMoves[0, ply] != null && 
-                    move.Source == killerMoves[0, ply].Source && 
-                    move.Destination == killerMoves[0, ply].Destination)
+                if (killerMoves[0, ply] != 0 && 
+                    MoveUtil.GetSource(move) == MoveUtil.GetSource(killerMoves[0, ply]) && 
+                    MoveUtil.GetDestination(move) == MoveUtil.GetDestination(killerMoves[0, ply]))
                 {
                     score = KILLER_SCORE;
                 }
-                else if (killerMoves[1, ply] != null && 
-                         move.Source == killerMoves[1, ply].Source && 
-                         move.Destination == killerMoves[1, ply].Destination)
+                else if (killerMoves[1, ply] != 0 && 
+                        MoveUtil.GetSource(move) == MoveUtil.GetSource(killerMoves[1, ply]) && 
+                        MoveUtil.GetDestination(move) == MoveUtil.GetDestination(killerMoves[1, ply]))
                 {
                     score = KILLER_SCORE - 1;
                 }
             }
             
             // 5. History heuristic (for quiet moves)
-            if (score == 0 && !IsMoveCapture(move) && !move.IsPromotion)
+            if (score == 0 && !IsMoveCapture(move) && !MoveUtil.IsPromotion(move))
             {
-                int historyScore = historyTable[move.IsWhite ? 0 : 1, move.Source * 64 + move.Destination];
+                bool isWhite = MoveUtil.IsWhite(move);
+                int source = MoveUtil.GetSource(move);
+                int dest = MoveUtil.GetDestination(move);
+                int historyScore = historyTable[isWhite ? 0 : 1, source * 64 + dest];
                 score = historyScore;
             }
             
-            move.Score = score;
+            moveScores[move] = score;
         }
         
         // Sort moves by score (descending)
-        moves.Sort((a, b) => b.Score.CompareTo(a.Score));
+        moves.Sort((a, b) => moveScores[b].CompareTo(moveScores[a]));
     }
     
     // The main function that will be called to get the best move
-    public Move GetBestMove(int depth, bool isWhite, Move previousMove)
+    public int GetBestMove(int depth, bool isWhite, int previousMove)
     {
         // Reset node counters
         nodesSearched = 0;
@@ -210,11 +219,11 @@ public class StockFridge
                 historyTable[i, j] = historyTable[i, j] * 80 / 100; // 80% decay
         
         // Get all possible legal moves for the current position
-        List<Move> possibleMoves = findMoves.GetAllPossibleMoves(isWhite, previousMove);
-        List<Move> legalMoves = new List<Move>();
+        List<int> possibleMoves = findMoves.GetAllPossibleMoves(isWhite, previousMove);
+        List<int> legalMoves = new List<int>();
         
         // Filter out moves that would leave the king in check
-        foreach (Move move in possibleMoves)
+        foreach (int move in possibleMoves)
         {
             bitboard.UpdateBitBoard(move);
             
@@ -231,7 +240,7 @@ public class StockFridge
             }
         }
         
-        // If no legal moves available, return null (checkmate or stalemate)
+        // If no legal moves available, return 0 (checkmate or stalemate)
         if (legalMoves.Count == 0)
         {
             bool inCheck = evaluation.IsInCheck(isWhite, 
@@ -239,16 +248,16 @@ public class StockFridge
                                             bitboard.returnBlackPiecesByTypes(), 
                                             bitboard.returnAllPieces());
             Debug.Log($"No legal moves: {(inCheck ? "Checkmate" : "Stalemate")}");
-            return null;
+            return 0;
         }
         
         // Iterative Deepening
-        Move bestMove = null;
+        int bestMove = 0;
         int bestValue = -INFINITY;
         
         // Check transposition table for a stored best move
         ulong currentHash = ComputeHash(isWhite);
-        Move ttMove = transpositionTable.GetMove(currentHash, isWhite, previousMove);
+        int ttMove = transpositionTable.GetMove(currentHash);
         
         // Perform iterative deepening to improve move ordering
         for (int currentDepth = 1; currentDepth <= depth; currentDepth++)
@@ -259,12 +268,12 @@ public class StockFridge
             // Order moves based on previous iterations
             OrderMoves(legalMoves, ttMove, 0);
             
-            Move iterationBestMove = null;
+            int iterationBestMove = 0;
             int iterationBestValue = -INFINITY;
             
             for (int i = 0; i < legalMoves.Count; i++)
             {
-                Move move = legalMoves[i];
+                int move = legalMoves[i];
                 
                 // Make the move
                 bitboard.UpdateBitBoard(move);
@@ -287,13 +296,13 @@ public class StockFridge
                         // Log progress for deeper iterations
                         if (currentDepth >= 3)
                         {
-                            Debug.Log($"Depth {currentDepth}, new best: {IndexToAlgebraic(move.Source)}-{IndexToAlgebraic(move.Destination)}, score: {value}");
+                            Debug.Log($"Depth {currentDepth}, new best: {BitboardUtils.IndexToAlgebraic(MoveUtil.GetSource(move))}-{BitboardUtils.IndexToAlgebraic(MoveUtil.GetDestination(move))}, score: {value}");
                         }
                     }
                 }
             }
             
-            if (iterationBestMove != null)
+            if (iterationBestMove != 0)
             {
                 bestValue = iterationBestValue;
                 bestMove = iterationBestMove;
@@ -303,7 +312,7 @@ public class StockFridge
                 transpositionTable.Store(currentHash, currentDepth, TranspositionTable.TT_EXACT, bestValue, bestMove);
             }
             
-            Debug.Log($"Depth {currentDepth} complete: Best move {IndexToAlgebraic(bestMove.Source)}-{IndexToAlgebraic(bestMove.Destination)}, score: {bestValue}");
+            Debug.Log($"Depth {currentDepth} complete: Best move {BitboardUtils.IndexToAlgebraic(MoveUtil.GetSource(bestMove))}-{BitboardUtils.IndexToAlgebraic(MoveUtil.GetDestination(bestMove))}, score: {bestValue}");
         }
         
         // Report search statistics
@@ -312,7 +321,7 @@ public class StockFridge
         return bestMove;
     }
 
-    private int Negamax(int depth, int alpha, int beta, bool isWhite, Move previousMove, int ply)
+    private int Negamax(int depth, int alpha, int beta, bool isWhite, int previousMove, int ply)
     {
         // Increment node counter
         nodesSearched++;
@@ -321,8 +330,8 @@ public class StockFridge
         ulong positionHash = ComputeHash(isWhite);
         
         // Check transposition table for this position
-        Move ttMove = null;
-        if (transpositionTable.Probe(positionHash, depth, alpha, beta, out int ttValue, out ttMove, isWhite, previousMove))
+        int ttMove = 0;
+        if (transpositionTable.Probe(positionHash, depth, alpha, beta, out int ttValue, out ttMove))
         {
             return ttValue;
         }
@@ -349,7 +358,7 @@ public class StockFridge
             int R = 2 + depth/4;  // Adaptive reduction
             
             // Try a reduced depth search after passing the turn
-            int nullValue = -Negamax(depth - 1 - R, -beta, -beta + 1, !isWhite, null, ply);
+            int nullValue = -Negamax(depth - 1 - R, -beta, -beta + 1, !isWhite, 0, ply);
             
             // If this reduced search still exceeds beta, we can prune
             if (nullValue >= beta)
@@ -357,18 +366,18 @@ public class StockFridge
         }
 
         // Get all possible moves
-        List<Move> possibleMoves = findMoves.GetAllPossibleMoves(isWhite, previousMove);
-        List<Move> legalMoves = new List<Move>();
+        List<int> possibleMoves = findMoves.GetAllPossibleMoves(isWhite, previousMove);
+        List<int> legalMoves = new List<int>();
         
         // Filter out moves that would leave the king in check
-        foreach (Move move in possibleMoves)
+        foreach (int move in possibleMoves)
         {
             bitboard.UpdateBitBoard(move);
             
             bool kingInCheck = evaluation.IsInCheck(isWhite, 
-                                                   bitboard.returnWhitePiecesByTypes(), 
-                                                   bitboard.returnBlackPiecesByTypes(), 
-                                                   bitboard.returnAllPieces());
+                                                bitboard.returnWhitePiecesByTypes(), 
+                                                bitboard.returnBlackPiecesByTypes(), 
+                                                bitboard.returnAllPieces());
             
             bitboard.UndoBitboard();
             
@@ -390,13 +399,13 @@ public class StockFridge
         OrderMoves(legalMoves, ttMove, ply);
         
         int bestValue = -INFINITY;
-        Move bestMove = null;
+        int bestMove = 0;
         int nodeType = TranspositionTable.TT_ALPHA;
         
         // Search loop
         for (int i = 0; i < legalMoves.Count; i++)
         {
-            Move move = legalMoves[i];
+            int move = legalMoves[i];
             
             // Make the move
             bitboard.UpdateBitBoard(move);
@@ -404,7 +413,7 @@ public class StockFridge
             int value;
             
             // Late Move Reduction for non-tactical moves after searching several moves
-            if (depth >= 3 && i >= 3 && !inCheck && !IsMoveCapture(move) && !move.IsPromotion)
+            if (depth >= 3 && i >= 3 && !inCheck && !IsMoveCapture(move) && !MoveUtil.IsPromotion(move))
             {
                 // Try a reduced depth search first
                 int reduction = 1 + (i >= 6 ? 1 : 0);
@@ -443,7 +452,7 @@ public class StockFridge
                         nodeType = TranspositionTable.TT_BETA;
                         
                         // Update killer moves and history table for quiet moves
-                        if (!IsMoveCapture(move) && !move.IsPromotion)
+                        if (!IsMoveCapture(move) && !MoveUtil.IsPromotion(move))
                         {
                             // Update killer moves (moves that caused a beta cutoff)
                             if (!MovesEqual(move, killerMoves[0, ply]))
@@ -453,7 +462,10 @@ public class StockFridge
                             }
                             
                             // Update history heuristic with depth-squared bonus
-                            historyTable[isWhite ? 0 : 1, move.Source * 64 + move.Destination] += depth * depth;
+                            bool isWhiteMove = MoveUtil.IsWhite(move);
+                            int source = MoveUtil.GetSource(move);
+                            int dest = MoveUtil.GetDestination(move);
+                            historyTable[isWhiteMove ? 0 : 1, source * 64 + dest] += depth * depth;
                         }
                         
                         break; // Beta cutoff
@@ -469,7 +481,7 @@ public class StockFridge
     }
     
     // Quiescence search to resolve tactical positions
-    private int QuiescenceSearch(int alpha, int beta, bool isWhite, Move previousMove, int ply)
+    private int QuiescenceSearch(int alpha, int beta, bool isWhite, int previousMove, int ply)
     {
         // Increment quiescence node counter
         qNodesSearched++;
@@ -494,23 +506,23 @@ public class StockFridge
             return alpha;
             
         // Generate capture moves
-        List<Move> captureMoves = GenerateCaptureMoves(isWhite, previousMove);
+        List<int> captureMoves = GenerateCaptureMoves(isWhite, previousMove);
         
         // Sort captures by MVV-LVA
-        OrderMoves(captureMoves, null, ply);
+        OrderMoves(captureMoves, 0, ply);
         
         // Search captures
-        foreach (Move move in captureMoves)
+        foreach (int move in captureMoves)
         {
             // Make the capture move
             bitboard.UpdateBitBoard(move);
             
             // Check if move would leave king in check
             bool kingInCheck = evaluation.IsInCheck(isWhite, 
-                                                   bitboard.returnWhitePiecesByTypes(), 
-                                                   bitboard.returnBlackPiecesByTypes(), 
-                                                   bitboard.returnAllPieces());
-                                                   
+                                                bitboard.returnWhitePiecesByTypes(), 
+                                                bitboard.returnBlackPiecesByTypes(), 
+                                                bitboard.returnAllPieces());
+                                                
             if (kingInCheck) {
                 bitboard.UndoBitboard();
                 continue; // Skip illegal moves
@@ -536,50 +548,53 @@ public class StockFridge
     }
     
     // Generate only capture moves for quiescence search
-    private List<Move> GenerateCaptureMoves(bool isWhite, Move previousMove)
+    private List<int> GenerateCaptureMoves(bool isWhite, int previousMove)
     {
-        List<Move> allMoves = findMoves.GetAllPossibleMoves(isWhite, previousMove);
-        List<Move> captureMoves = new List<Move>();
+        List<int> allMoves = findMoves.GetAllPossibleMoves(isWhite, previousMove);
+        List<int> captureMoves = new List<int>();
         
-        foreach (Move move in allMoves)
+        foreach (int move in allMoves)
         {
             if (IsMoveCapture(move))
                 captureMoves.Add(move);
                 
             // Also include pawn promotions
-            else if (move.IsPromotion)
+            else if (MoveUtil.IsPromotion(move))
                 captureMoves.Add(move);
         }
         
         return captureMoves;
     }
-    
+
     // Helper methods
-    private bool IsMoveCapture(Move move)
+    private bool IsMoveCapture(int move)
     {
-        if (move == null) return false;
+        if (move == 0) return false;
         
-        ulong destBit = 1UL << move.Destination;
+        int dest = MoveUtil.GetDestination(move);
+        ulong destBit = 1UL << dest;
         
-        if (move.IsWhite)
+        if (MoveUtil.IsWhite(move))
         {
             // For white, see if there's a black piece at the destination
-            return (destBit & bitboard.returnAllBlackPieces()) != 0 || move.IsEnPassant;
+            return (destBit & bitboard.returnAllBlackPieces()) != 0 || MoveUtil.IsEnPassant(move);
         }
         else
         {
             // For black, see if there's a white piece at the destination
-            return (destBit & bitboard.returnAllWhitePieces()) != 0 || move.IsEnPassant;
+            return (destBit & bitboard.returnAllWhitePieces()) != 0 || MoveUtil.IsEnPassant(move);
         }
     }
-    
-    private bool MovesEqual(Move a, Move b)
+
+    private bool MovesEqual(int a, int b)
     {
-        if (a == null || b == null) return false;
+        if (a == 0 || b == 0) return false;
         
-        return a.Source == b.Source && a.Destination == b.Destination && a.IsWhite == b.IsWhite;
+        return MoveUtil.GetSource(a) == MoveUtil.GetSource(b) && 
+            MoveUtil.GetDestination(a) == MoveUtil.GetDestination(b) && 
+            MoveUtil.IsWhite(a) == MoveUtil.IsWhite(b);
     }
-    
+
     // Check if side has non-pawn material (needed for null move pruning)
     private bool HasNonPawnMaterial(bool isWhite)
     {
@@ -588,7 +603,6 @@ public class StockFridge
         else
             return (bitboard.BlackKnight | bitboard.BlackBishop | bitboard.BlackRook | bitboard.BlackQueen) != 0;
     }
-    
     private int EvaluatePosition(bool isWhite)
     {
         return evaluation.EvaluatePosition(
@@ -623,8 +637,7 @@ public class StockFridge
         }
     }
     
-    // This is a simplified version - you'd need to add your TranspositionTable implementation
-    // with TT_EXACT, TT_ALPHA, TT_BETA constants and Store/Probe methods
+
     public class TranspositionTable
     {
         // Constants for entry types
@@ -648,27 +661,7 @@ public class StockFridge
             public byte Flag;        // Entry type (EXACT, ALPHA, BETA)
             public byte Age;         // For replacement strategy
             public int Value;        // Evaluation score
-            public ushort Move;      // Packed move representation
-            
-            // Convert Move object to compact representation
-            public static ushort PackMove(Move move)
-            {
-                if (move == null) return 0;
-                // Pack move into 16 bits: 6 bits source + 6 bits destination + 4 bits piece type
-                return (ushort)((move.Source << 10) | (move.Destination << 4) | (move.PieceType & 0xF));
-            }
-            
-            // Convert packed representation back to Move object
-            public static Move UnpackMove(ushort packed, bool isWhite, Move previousMove)
-            {
-                if (packed == 0) return null;
-                
-                int source = (packed >> 10) & 0x3F;
-                int destination = (packed >> 4) & 0x3F;
-                int pieceType = packed & 0xF;
-                
-                return new Move(source, destination, previousMove, pieceType, isWhite);
-            }
+            public int Move;         // Integer move representation
         }
         
         // Main table storage
@@ -702,7 +695,7 @@ public class StockFridge
         }
         
         // Store an entry with enhanced replacement strategy
-        public void Store(ulong key, int depth, int flag, int value, Move bestMove)
+        public void Store(ulong key, int depth, int flag, int value, int bestMove)
         {
             int index = (int)(key & TT_MASK);
             ref TTEntry entry = ref table[index];
@@ -715,7 +708,7 @@ public class StockFridge
                 Flag = (byte)flag,
                 Age = currentAge,
                 Value = value,
-                Move = TTEntry.PackMove(bestMove)
+                Move = bestMove
             };
             
             // Replacement strategy
@@ -726,7 +719,7 @@ public class StockFridge
         }
         
         // Probe the table
-        public bool Probe(ulong key, int depth, int alpha, int beta, out int value, out Move bestMove, bool isWhite, Move previousMove)
+        public bool Probe(ulong key, int depth, int alpha, int beta, out int value, out int bestMove)
         {
             probes++;
             int index = (int)(key & TT_MASK);
@@ -735,7 +728,7 @@ public class StockFridge
             // Check if entry is valid for this position
             if (entry.Key == key)
             {
-                bestMove = TTEntry.UnpackMove(entry.Move, isWhite, previousMove);
+                bestMove = entry.Move;
                 
                 // Only use the score if depth is sufficient
                 if (entry.Depth >= depth)
@@ -775,22 +768,22 @@ public class StockFridge
             
             // No useful entry found
             value = 0;
-            bestMove = null;
+            bestMove = 0;
             return false;
         }
         
         // Get a move for move ordering, regardless of depth
-        public Move GetMove(ulong key, bool isWhite, Move previousMove)
+        public int GetMove(ulong key)
         {
             int index = (int)(key & TT_MASK);
             ref TTEntry entry = ref table[index];
             
             if (entry.Key == key && entry.Move != 0)
             {
-                return TTEntry.UnpackMove(entry.Move, isWhite, previousMove);
+                return entry.Move;
             }
             
-            return null;
+            return 0;
         }
         
         // Stats for debugging and tuning
@@ -804,7 +797,7 @@ public class StockFridge
         public long GetMemoryUsage()
         {
             // Size of the TTEntry struct * number of entries
-            return TT_SIZE * (sizeof(ulong) + sizeof(short) + sizeof(byte) * 2 + sizeof(int) + sizeof(ushort));
+            return TT_SIZE * (sizeof(ulong) + sizeof(short) + sizeof(byte) * 2 + sizeof(int) * 2);
         }
     }
 }

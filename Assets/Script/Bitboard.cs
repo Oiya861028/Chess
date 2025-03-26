@@ -30,7 +30,7 @@ public class Bitboard {
     public bool whiteKingsideRookMoved = false;
     public bool blackQueensideRookMoved = false;
     public bool blackKingsideRookMoved = false;
-    Move previousMove;
+    private int previousMove; 
     
     // Enhanced move state to track all board state completely
     private class MoveState {
@@ -60,7 +60,7 @@ public class Bitboard {
         public ulong blackKing;
         
         // Previous move reference for en passant tracking
-        public Move previousMove;
+        public int previousMove;
         
         public MoveState(Bitboard board) {
             // Store castling flags
@@ -111,7 +111,7 @@ public class Bitboard {
     private int undoCount = 0;
     
     public Bitboard() {
-        previousMove = null;
+        previousMove = 0;
     }
     
     //Utility functions
@@ -200,19 +200,28 @@ public class Bitboard {
         return $"{(char)('a' + file)}{rank + 1}";
     }
     
-    public void UpdateBitBoard(Move move) {
+    public void UpdateBitBoard(int move)
+    {
         // Increment move counter
         moveCount++;
         
-        // Create a new state to track the current board state before move
         MoveState state = new MoveState(this);
         
-        ulong sourceMask = 1UL << move.Source;
-        ulong destinationMask = 1UL << move.Destination;
+        int source = MoveUtil.GetSource(move);
+        int destination = MoveUtil.GetDestination(move);
+        int pieceType = MoveUtil.GetPieceType(move);
+        bool isWhite = MoveUtil.IsWhite(move);
+        bool isEnPassant = MoveUtil.IsEnPassant(move);
+        bool isPromotion = MoveUtil.IsPromotion(move);
+        bool isCastling = MoveUtil.IsCastling(move);
+        int promotionPieceType = MoveUtil.GetPromotionPieceType(move);
+        
+        ulong sourceMask = 1UL << source;
+        ulong destinationMask = 1UL << destination;
         
         // Record any pieces that might be captured at the destination
         // White pieces that might be captured by black
-        if (!move.IsWhite) {
+        if (!isWhite) {
             state.capturedPieces[WHITE_PAWN] = WhitePawn & destinationMask;
             state.capturedPieces[WHITE_KNIGHT] = WhiteKnight & destinationMask;
             state.capturedPieces[WHITE_BISHOP] = WhiteBishop & destinationMask;
@@ -245,20 +254,20 @@ public class Bitboard {
         }
 
         // Update castling rights
-        if (move.PieceType == (int)PieceType.King) {
-            if (move.IsWhite) {
+        if (pieceType == (int)PieceType.King) {
+            if (isWhite) {
                 whiteKingMoved = true;
                 
                 // Handle castling
-                if (move.Source == WHITE_KING_START) {
+                if (source == WHITE_KING_START) {
                     // Kingside castling
-                    if (move.Destination == 1) { // g1
+                    if (destination == 1) { // g1
                         // Move the rook too
                         WhiteRook &= ~(1UL << 0); // Remove from h1
                         WhiteRook |= (1UL << 2);  // Add to f1
                     }
                     // Queenside castling
-                    else if (move.Destination == 5) { // c1
+                    else if (destination == 5) { // c1
                         // Move the rook too
                         WhiteRook &= ~(1UL << 7); // Remove from a1
                         WhiteRook |= (1UL << 4);  // Add to d1
@@ -269,15 +278,15 @@ public class Bitboard {
                 blackKingMoved = true;
                 
                 // Handle castling
-                if (move.Source == BLACK_KING_START) {
+                if (source == BLACK_KING_START) {
                     // Kingside castling
-                    if (move.Destination == 57) { // g8
+                    if (destination == 57) { // g8
                         // Move the rook too
                         BlackRook &= ~(1UL << 56); // Remove from h8
                         BlackRook |= (1UL << 58);  // Add to f8
                     }
                     // Queenside castling
-                    else if (move.Destination == 61) { // c8
+                    else if (destination == 61) { // c8
                         // Move the rook too
                         BlackRook &= ~(1UL << 63); // Remove from a8
                         BlackRook |= (1UL << 60);  // Add to d8
@@ -285,48 +294,48 @@ public class Bitboard {
                 }
             }
         }
-        else if (move.PieceType == (int)PieceType.Rook) {
-            if (move.IsWhite) {
-                if (move.Source == WHITE_QUEENSIDE_ROOK_START) { // White rook at a1 (bit 7 in reverse mapping - queenside)
+        else if (pieceType == (int)PieceType.Rook) {
+            if (isWhite) {
+                if (source == WHITE_QUEENSIDE_ROOK_START) { 
                     whiteQueensideRookMoved = true;
                 } 
-                else if (move.Source == WHITE_KINGSIDE_ROOK_START) { // White rook at h1 (bit 0 in reverse mapping - kingside)
+                else if (source == WHITE_KINGSIDE_ROOK_START) { 
                     whiteKingsideRookMoved = true;
                 }
             } 
             else {
-                if (move.Source == BLACK_QUEENSIDE_ROOK_START) { // Black rook at a8 (bit 63 in reverse mapping - queenside)
+                if (source == BLACK_QUEENSIDE_ROOK_START) { 
                     blackQueensideRookMoved = true;
                 } 
-                else if (move.Source == BLACK_KINGSIDE_ROOK_START) { // Black rook at h8 (bit 56 in reverse mapping - kingside)
+                else if (source == BLACK_KINGSIDE_ROOK_START) { 
                     blackKingsideRookMoved = true;
                 }
             }
         }
 
         // Handle en passant captures
-        if (move.PieceType == (int)PieceType.Pawn && move.IsEnPassant) {
+        if (pieceType == (int)PieceType.Pawn && isEnPassant) {
             int capturedPawnSquare;
             
-            if (move.IsWhite) {
+            if (isWhite) {
                 // White capturing black pawn
-                capturedPawnSquare = move.Destination - 8; // The black pawn is one rank below
+                capturedPawnSquare = destination - 8; // The black pawn is one rank below
                 BlackPawn &= ~(1UL << capturedPawnSquare);
             } else {
                 // Black capturing white pawn
-                capturedPawnSquare = move.Destination + 8; // The white pawn is one rank above
+                capturedPawnSquare = destination + 8; // The white pawn is one rank above
                 WhitePawn &= ~(1UL << capturedPawnSquare);
             }
         }
 
         // Handle promotion
-        if (move.IsPromotion) {
+        if (isPromotion) {
             // Remove the pawn from source
-            if (move.IsWhite) {
+            if (isWhite) {
                 WhitePawn &= ~sourceMask;
                 
                 // Add the promoted piece at destination
-                switch (move.PromotionPieceType) {
+                switch (promotionPieceType) {
                     case (int)PieceType.Queen:
                         WhiteQueen |= destinationMask;
                         break;
@@ -347,7 +356,7 @@ public class Bitboard {
                 BlackPawn &= ~sourceMask;
                 
                 // Add the promoted piece at destination
-                switch (move.PromotionPieceType) {
+                switch (promotionPieceType) {
                     case (int)PieceType.Queen:
                         BlackQueen |= destinationMask;
                         break;
@@ -369,57 +378,57 @@ public class Bitboard {
         // Regular, non-promotion move
         else {
             // Remove the piece from the source position
-            switch (move.PieceType) {
+            switch (pieceType) {
                 case (int) PieceType.Pawn:
-                    if (move.IsWhite) WhitePawn &= ~sourceMask;
+                    if (isWhite) WhitePawn &= ~sourceMask;
                     else BlackPawn &= ~sourceMask;
                     break;
                 case (int) PieceType.Rook:
-                    if (move.IsWhite) WhiteRook &= ~sourceMask;
+                    if (isWhite) WhiteRook &= ~sourceMask;
                     else BlackRook &= ~sourceMask;
                     break;
                 case (int) PieceType.Knight:
-                    if (move.IsWhite) WhiteKnight &= ~sourceMask;
+                    if (isWhite) WhiteKnight &= ~sourceMask;
                     else BlackKnight &= ~sourceMask;
                     break;
                 case (int) PieceType.Bishop:
-                    if (move.IsWhite) WhiteBishop &= ~sourceMask;
+                    if (isWhite) WhiteBishop &= ~sourceMask;
                     else BlackBishop &= ~sourceMask;
                     break;
                 case (int) PieceType.Queen:
-                    if (move.IsWhite) WhiteQueen &= ~sourceMask;
+                    if (isWhite) WhiteQueen &= ~sourceMask;
                     else BlackQueen &= ~sourceMask;
                     break;
                 case (int) PieceType.King:
-                    if (move.IsWhite) WhiteKing &= ~sourceMask;
+                    if (isWhite) WhiteKing &= ~sourceMask;
                     else BlackKing &= ~sourceMask;
                     break;
             }
 
             // Place the piece at the destination position (normal move)
-            switch (move.PieceType) {
+            switch (pieceType) {
                 case (int) PieceType.Pawn:
-                    if (move.IsWhite) WhitePawn |= destinationMask;
+                    if (isWhite) WhitePawn |= destinationMask;
                     else BlackPawn |= destinationMask;
                     break;
                 case (int) PieceType.Rook:
-                    if (move.IsWhite) WhiteRook |= destinationMask;
+                    if (isWhite) WhiteRook |= destinationMask;
                     else BlackRook |= destinationMask;
                     break;
                 case (int) PieceType.Knight:
-                    if (move.IsWhite) WhiteKnight |= destinationMask;
+                    if (isWhite) WhiteKnight |= destinationMask;
                     else BlackKnight |= destinationMask;
                     break;
                 case (int) PieceType.Bishop:
-                    if (move.IsWhite) WhiteBishop |= destinationMask;
+                    if (isWhite) WhiteBishop |= destinationMask;
                     else BlackBishop |= destinationMask;
                     break;
                 case (int) PieceType.Queen:
-                    if (move.IsWhite) WhiteQueen |= destinationMask;
+                    if (isWhite) WhiteQueen |= destinationMask;
                     else BlackQueen |= destinationMask;
                     break;
                 case (int) PieceType.King:
-                    if (move.IsWhite) WhiteKing |= destinationMask;
+                    if (isWhite) WhiteKing |= destinationMask;
                     else BlackKing |= destinationMask;
                     break;
             }
@@ -433,11 +442,12 @@ public class Bitboard {
         
         // Verify board consistency after move
         if (!VerifyBoardConsistency()) {
-            Debug.LogError($"Board corrupted after move {move.Source}-{move.Destination}");
+            Debug.LogError($"Board corrupted after move {MoveUtil.MoveToString(move)}");
         }
     }
 
-    public void UndoBitboard() {
+    public void UndoBitboard()
+    {
         // Increment undo counter
         undoCount++;
         
