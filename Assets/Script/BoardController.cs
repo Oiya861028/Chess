@@ -133,16 +133,6 @@ public class BoardController : MonoBehaviour
 
     void Update()
     {
-        // Check for checkmate for the current player
-        if (isWhiteTurn && DetectCheckmate(true))
-        {
-            Debug.Log("Checkmate! Black wins!");
-            
-        }
-        else if (!isWhiteTurn && DetectCheckmate(false))
-        {
-            Debug.Log("Checkmate! White wins!");
-        }
         
         switch (gameMode)
         {
@@ -410,7 +400,12 @@ public class BoardController : MonoBehaviour
                     selectedPieceIndex = -1;
                     possibleMoves = 0;
                     isWhiteTurn = !isWhiteTurn;
-                    
+                    if (DetectCheckmate(isWhiteTurn))
+                    {
+                        string winner = isWhiteTurn ? "Black" : "White";
+                        Debug.Log($"Checkmate! {winner} wins!");
+                        // Optionally disable further moves with a gameIsOver flag
+                    }
                     Debug.Log("AI moved from " + BitboardUtils.IndexToAlgebraic(aiMove.Source) + 
                             " to " + BitboardUtils.IndexToAlgebraic(aiMove.Destination));
                             
@@ -591,6 +586,11 @@ public class BoardController : MonoBehaviour
                 // Switch turns
                 isWhiteTurn = !isWhiteTurn;
                 Debug.Log(isWhiteTurn ? "White's turn" : "Black's turn");
+                if (DetectCheckmate(isWhiteTurn))
+                {
+                    string winner = isWhiteTurn ? "Black" : "White";
+                    Debug.Log($"Checkmate! {winner} wins!");
+                }
                 return;
             }
 
