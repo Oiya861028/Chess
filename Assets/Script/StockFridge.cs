@@ -28,6 +28,11 @@ public class StockFridge
     // History heuristic table for quiet move ordering
     private int[,] historyTable = new int[2, 64 * 64]; // [color, from*64+to]
     
+    // Game position history for detecting repetitions
+    private Dictionary<ulong, int> gamePositionHistory = new Dictionary<ulong, int>();
+    // Search position history (copy of game history used during search)
+    private Dictionary<ulong, int> positionHistory = new Dictionary<ulong, int>();
+    
     // Node statistics for debugging/tuning
     private int nodesSearched = 0;
     private int qNodesSearched = 0;
@@ -54,7 +59,22 @@ public class StockFridge
         // Generate key for side to move
         sideToMoveKey = ((ulong)rand.Next() << 32) | (ulong)rand.Next();
         
+        // Initialize position history with current position
+        ResetGameHistory();
+        
         Debug.Log($"StockFridge initialized with transposition table. Memory usage: {transpositionTable.GetMemoryUsage() / (1024 * 1024)} MB");
+    }
+    
+    // Reset game history for a new game
+    public void ResetGameHistory()
+    {
+        gamePositionHistory.Clear();
+        
+        // Add the current position to the history
+        ulong currentHash = ComputeHash(true); // Starting with white's position
+        gamePositionHistory[currentHash] = 1;
+        
+        Debug.Log("Game position history reset");
     }
     
     // Compute Zobrist hash for the current board position
@@ -207,6 +227,9 @@ public class StockFridge
         nodesSearched = 0;
         qNodesSearched = 0;
         
+        // Copy the game history for this search
+        positionHistory = new Dictionary<ulong, int>(gamePositionHistory);
+        
         // Increment age for the transposition table
         transpositionTable.IncrementAge();
         
@@ -278,8 +301,20 @@ public class StockFridge
                 // Make the move
                 bitboard.UpdateBitBoard(move);
                 
+                // Update position history for this move
+                ulong newHash = ComputeHash(!isWhite);
+                if (positionHistory.ContainsKey(newHash))
+                    positionHistory[newHash]++;
+                else
+                    positionHistory[newHash] = 1;
+                
                 // Get the value for this move
                 int value = -Negamax(currentDepth - 1, -beta, -alpha, !isWhite, move, 1);
+                
+                // Restore position history
+                positionHistory[newHash]--;
+                if (positionHistory[newHash] == 0)
+                    positionHistory.Remove(newHash);
                 
                 // Undo the move
                 bitboard.UndoBitboard();
@@ -315,6 +350,22 @@ public class StockFridge
             Debug.Log($"Depth {currentDepth} complete: Best move {BitboardUtils.IndexToAlgebraic(MoveUtil.GetSource(bestMove))}-{BitboardUtils.IndexToAlgebraic(MoveUtil.GetDestination(bestMove))}, score: {bestValue}");
         }
         
+        // Update game position history with the best move
+        if (bestMove != 0)
+        {
+            bitboard.UpdateBitBoard(bestMove);
+            ulong newPositionHash = ComputeHash(!isWhite);
+            
+            if (gamePositionHistory.ContainsKey(newPositionHash))
+                gamePositionHistory[newPositionHash]++;
+            else
+                gamePositionHistory[newPositionHash] = 1;
+                
+            bitboard.UndoBitboard();
+            
+            
+        }
+        
         // Report search statistics
         Debug.Log($"Search completed: {nodesSearched} regular nodes, {qNodesSearched} quiescence nodes");
         
@@ -328,6 +379,13 @@ public class StockFridge
         
         // Generate hash for current position
         ulong positionHash = ComputeHash(isWhite);
+        
+        // Check for threefold repetition
+        if (positionHistory.TryGetValue(positionHash, out int count) && count >= 2)
+        {
+            // This would be the third occurrence - return draw score
+            return 0;
+        }
         
         // Check transposition table for this position
         int ttMove = 0;
@@ -410,6 +468,13 @@ public class StockFridge
             // Make the move
             bitboard.UpdateBitBoard(move);
             
+            // Track position for repetition detection
+            ulong newPositionHash = ComputeHash(!isWhite);
+            if (positionHistory.ContainsKey(newPositionHash))
+                positionHistory[newPositionHash]++;
+            else
+                positionHistory[newPositionHash] = 1;
+            
             int value;
             
             // Late Move Reduction for non-tactical moves after searching several moves
@@ -430,6 +495,11 @@ public class StockFridge
                 // Full-depth search
                 value = -Negamax(depth - 1, -beta, -alpha, !isWhite, move, ply + 1);
             }
+            
+            // Restore position history before undoing the move
+            positionHistory[newPositionHash]--;
+            if (positionHistory[newPositionHash] == 0)
+                positionHistory.Remove(newPositionHash);
             
             // Undo the move
             bitboard.UndoBitboard();
@@ -490,6 +560,16 @@ public class StockFridge
         if (ply >= MAX_QUIESCENCE_DEPTH)
             return EvaluatePosition(isWhite);
         
+        // Generate hash for current position
+        ulong positionHash = ComputeHash(isWhite);
+        
+        // Check for threefold repetition in quiescence search too
+        if (positionHistory.TryGetValue(positionHash, out int count) && count >= 2)
+        {
+            // This would be the third occurrence - return draw score
+            return 0;
+        }
+        
         // First, get the stand-pat score
         int standPat = EvaluatePosition(isWhite);
         
@@ -528,8 +608,20 @@ public class StockFridge
                 continue; // Skip illegal moves
             }
             
+            // Track position for repetition detection
+            ulong newPositionHash = ComputeHash(!isWhite);
+            if (positionHistory.ContainsKey(newPositionHash))
+                positionHistory[newPositionHash]++;
+            else
+                positionHistory[newPositionHash] = 1;
+            
             // Recursive quiescence search
             int score = -QuiescenceSearch(-beta, -alpha, !isWhite, move, ply + 1);
+            
+            // Restore position history
+            positionHistory[newPositionHash]--;
+            if (positionHistory[newPositionHash] == 0)
+                positionHistory.Remove(newPositionHash);
             
             // Undo the move
             bitboard.UndoBitboard();
